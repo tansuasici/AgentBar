@@ -24,6 +24,7 @@ enum LiveStatus: Equatable {
     case loaded
     case loading
     case error(String)
+    case needsLogin
     case notSupported
 }
 

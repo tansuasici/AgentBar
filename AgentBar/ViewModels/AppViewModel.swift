@@ -8,11 +8,10 @@ final class AppViewModel {
     var usageMap: [AppPreset: LiveUsageData] = [:]
     var isRefreshing = false
 
-    // Web login manager (shared with views)
     let loginManager = WebLoginManager()
 
     private var refreshTimer: Timer?
-    private let refreshInterval: TimeInterval = 300 // 5 minutes
+    private let refreshInterval: TimeInterval = 300
 
     private let claudeWebClient = ClaudeWebClient()
     private let chatgptWebClient = ChatGPTWebClient()
@@ -82,10 +81,32 @@ final class AppViewModel {
 
             switch app {
             case .claude:
-                buckets = try await fetchClaude()
+                // Web login ile giriş yapılmışsa → claude.ai API
+                // Yapılmamışsa → "Sign in" göster
+                guard loginManager.connectedServices.contains("claude") else {
+                    await MainActor.run {
+                        usageMap[app] = LiveUsageData(app: app, buckets: [], status: .needsLogin, lastUpdated: Date())
+                    }
+                    return
+                }
+                guard let cookieHeader = await loginManager.getCookieHeader(for: "claude") else {
+                    throw ClaudeError.noCookies
+                }
+                buckets = try await claudeWebClient.fetchUsageFromWebLogin(cookieHeader: cookieHeader)
 
             case .chatgpt:
-                buckets = try await fetchChatGPT()
+                // Web login ile giriş yapılmışsa → chatgpt.com API
+                // Yapılmamışsa → "Sign in" göster
+                guard loginManager.connectedServices.contains("chatgpt") else {
+                    await MainActor.run {
+                        usageMap[app] = LiveUsageData(app: app, buckets: [], status: .needsLogin, lastUpdated: Date())
+                    }
+                    return
+                }
+                guard let cookieHeader = await loginManager.getCookieHeader(for: "chatgpt") else {
+                    throw ChatGPTWebError.noCookies
+                }
+                buckets = try await chatgptWebClient.fetchUsage(cookieHeader: cookieHeader)
 
             case .cursor:
                 let data = try CursorLocalReader.readLocalData()
@@ -105,57 +126,19 @@ final class AppViewModel {
                 )
             }
         } catch {
+            // Session expired → disconnect and show login
+            if case ServiceError.unauthorized = error {
+                await MainActor.run { loginManager.disconnect(serviceId: app.rawValue) }
+                await MainActor.run {
+                    usageMap[app] = LiveUsageData(app: app, buckets: [], status: .needsLogin, lastUpdated: Date())
+                }
+                return
+            }
+
             await MainActor.run {
-                usageMap[app] = LiveUsageData.error(
-                    app: app,
-                    message: error.localizedDescription
-                )
+                usageMap[app] = LiveUsageData.error(app: app, message: error.localizedDescription)
             }
         }
-    }
-
-    // MARK: - Claude
-
-    private func fetchClaude() async throws -> [UsageBucket] {
-        // Primary: web login cookies (no Keychain needed)
-        if loginManager.connectedServices.contains("claude") {
-            if let cookieHeader = await loginManager.getCookieHeader(for: "claude") {
-                do {
-                    return try await claudeWebClient.fetchUsageFromWebLogin(cookieHeader: cookieHeader)
-                } catch {
-                    // If session expired, clear connection
-                    if case ServiceError.unauthorized = error {
-                        await MainActor.run { loginManager.disconnect(serviceId: "claude") }
-                    }
-                    throw error
-                }
-            }
-        }
-
-        // Fallback: desktop app cookie (if Claude Desktop installed)
-        return try await claudeWebClient.fetchUsageFromDesktop()
-    }
-
-    // MARK: - ChatGPT
-
-    private func fetchChatGPT() async throws -> [UsageBucket] {
-        // Primary: web login cookies
-        if loginManager.connectedServices.contains("chatgpt") {
-            if let cookieHeader = await loginManager.getCookieHeader(for: "chatgpt") {
-                do {
-                    return try await chatgptWebClient.fetchUsage(cookieHeader: cookieHeader)
-                } catch {
-                    if case ChatGPTWebError.sessionExpired = error {
-                        await MainActor.run { loginManager.disconnect(serviceId: "chatgpt") }
-                    }
-                    throw error
-                }
-            }
-        }
-
-        // Fallback: local data from ChatGPT.app
-        let data = try ChatGPTLocalReader.readLocalData()
-        return ChatGPTLocalReader.toBuckets(data)
     }
 
     // MARK: - Helpers

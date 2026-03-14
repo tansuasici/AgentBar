@@ -199,6 +199,21 @@ struct AppRowView: View {
                     }
                     .padding(.leading, 20)
 
+                case .needsLogin:
+                    Button {
+                        onConnect()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.crop.circle.badge.plus")
+                                .font(.caption)
+                            Text("Sign in to \(app.displayName)")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 20)
+
                 case .notSupported:
                     Text("Local data only")
                         .font(.caption2)
@@ -234,6 +249,10 @@ struct AppRowView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.red)
+            case .needsLogin:
+                Text("Sign in")
+                    .font(.caption2)
+                    .foregroundStyle(.blue)
             case .notSupported:
                 Text("Detected")
                     .font(.caption2)
@@ -252,6 +271,7 @@ struct AppRowView: View {
             return .green
         case .loading: return .orange
         case .error: return .red
+        case .needsLogin: return .gray
         case .notSupported: return .blue
         }
     }
