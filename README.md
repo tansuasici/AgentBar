@@ -12,13 +12,13 @@ A native macOS menu bar app that shows your **Claude usage & rate limits** at a 
 
 ## Install
 
-Download the latest DMG from [Releases](https://github.com/tansuasici/ClaudeBar/releases), open it, and drag AgentBar to Applications.
+Download the latest DMG from [Releases](https://github.com/tansuasici/AgentBar/releases), open it, and drag AgentBar to Applications.
 
 ## Build from Source
 
 ```bash
-git clone https://github.com/tansuasici/ClaudeBar.git
-cd ClaudeBar
+git clone https://github.com/tansuasici/AgentBar.git
+cd AgentBar
 open AgentBar.xcodeproj
 # Build & Run (Cmd+R) in Xcode
 ```
