@@ -1,81 +1,41 @@
 # AgentBar
 
-A native macOS menu bar app that auto-detects installed AI tools and shows their usage stats with a single click.
+A native macOS menu bar app that shows your **Claude usage & rate limits** at a glance.
 
 ## Features
 
-- **Zero Configuration** — No API keys, no manual setup. Auto-detects installed AI apps.
-- **Web Login** — Sign in to Claude and ChatGPT directly from AgentBar for live usage data.
-- **Local-First** — Reads data from your device. No external servers, no telemetry.
-- **Live Usage Bars** — See rate limit utilization, reset timers, and plan info at a glance.
+- **Claude Rate Limits** — Current session %, weekly limits (all models + per-model), and extra usage credits.
+- **Zero Configuration** — Sign in once, see your usage instantly.
 - **Menu Bar Native** — Lives in your macOS menu bar, one click to open.
+- **Auto-Refresh** — Updates automatically every few minutes.
+- **Local-First** — All data stays on your device. No servers, no telemetry.
 
-## Supported Apps
+## Install
 
-| App | Data Source | What You See |
-|-----|-----------|-------------|
-| **Claude** | Web login or Desktop cookies | 5h/7d usage %, reset timers, extra usage credits |
-| **ChatGPT** | Web login or local data | Plan type, rate limit status, conversation count, last model |
-| **Cursor** | Local SQLite (state.vscdb) | Plan (free/pro), subscription status, last model, email |
-| **Codex** | Log file analysis | Session count, active days, auth method |
+Download the latest DMG from [Releases](https://github.com/tansuasici/ClaudeBar/releases), open it, and drag AgentBar to Applications.
 
-## How It Works
-
-1. **Auto-detect**: Scans `/Applications/` for AI apps on launch
-2. **Web Login** (recommended): Click "Sign in" to open a login window — cookies are stored locally
-3. **Local Fallback**: Reads data from app databases, logs, and preferences when available
-4. **Auto-refresh**: Updates every 5 minutes automatically
-
-## Requirements
-
-- macOS 14.0 (Sonoma) or later
-- [xcodegen](https://github.com/yonaskolb/XcodeGen) (for building from source)
-
-## Build
+## Build from Source
 
 ```bash
-# Install xcodegen if needed
-brew install xcodegen
-
-# Clone and build
-git clone https://github.com/tansuasici/AgentBar.git
-cd AgentBar
-xcodegen generate
+git clone https://github.com/tansuasici/ClaudeBar.git
+cd ClaudeBar
 open AgentBar.xcodeproj
 # Build & Run (Cmd+R) in Xcode
 ```
 
-## Architecture
+Requires macOS 14.0 (Sonoma) or later.
 
-```
-AgentBar/
-├── AgentBarApp.swift          # Menu bar app entry point
-├── Models/
-│   ├── LiveUsageData.swift    # Usage buckets and status types
-│   └── SubscriptionService.swift  # App detection (AppPreset enum)
-├── Services/
-│   ├── WebLoginManager.swift      # WKWebView-based login (primary)
-│   ├── ClaudeWebClient.swift      # Claude usage API client
-│   ├── ChatGPTWebClient.swift     # ChatGPT web API client
-│   ├── ChatGPTLocalReader.swift   # ChatGPT local data reader
-│   ├── ChromiumCookieReader.swift # Electron cookie decryption (fallback)
-│   ├── CursorLocalReader.swift    # Cursor state.vscdb reader
-│   └── CodexLocalReader.swift     # Codex log file analyzer
-├── ViewModels/
-│   └── AppViewModel.swift     # Main state management
-└── Views/
-    ├── MenuContentView.swift  # Menu bar popup UI
-    ├── WebLoginView.swift     # WKWebView login window
-    └── SettingsView.swift     # Settings (detected apps list)
-```
+## How It Works
+
+1. Sign in with your Claude account via the built-in browser
+2. AgentBar reads your usage data from the Claude API
+3. Displays session usage, weekly limits, and extra credits in a compact menu bar popup
 
 ## Privacy
 
 All data stays on your device. AgentBar:
-- Does **not** send data to any server
+- Does **not** send data to any server (other than claude.ai for your own usage data)
 - Does **not** collect analytics or telemetry
-- Stores login cookies locally in WKWebsiteDataStore
-- Only communicates with the AI services you explicitly sign in to
 
 ## License
 

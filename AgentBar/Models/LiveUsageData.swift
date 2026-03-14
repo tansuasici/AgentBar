@@ -1,22 +1,17 @@
 import Foundation
 
-/// Live usage data fetched from a detected app
+/// Live usage data fetched from claude.ai
 struct LiveUsageData: Equatable {
-    let app: AppPreset
     let buckets: [UsageBucket]
     let status: LiveStatus
     let lastUpdated: Date
 
-    static func loading(app: AppPreset) -> LiveUsageData {
-        LiveUsageData(app: app, buckets: [], status: .loading, lastUpdated: Date())
+    static func loading() -> LiveUsageData {
+        LiveUsageData(buckets: [], status: .loading, lastUpdated: Date())
     }
 
-    static func error(app: AppPreset, message: String) -> LiveUsageData {
-        LiveUsageData(app: app, buckets: [], status: .error(message), lastUpdated: Date())
-    }
-
-    static func notSupported(app: AppPreset) -> LiveUsageData {
-        LiveUsageData(app: app, buckets: [], status: .notSupported, lastUpdated: Date())
+    static func error(message: String) -> LiveUsageData {
+        LiveUsageData(buckets: [], status: .error(message), lastUpdated: Date())
     }
 }
 
@@ -25,10 +20,9 @@ enum LiveStatus: Equatable {
     case loading
     case error(String)
     case needsLogin
-    case notSupported
 }
 
-/// A single usage bucket (e.g., "5-Hour Window: 44% used, resets in 2h 16m")
+/// A single usage bucket (e.g., "Current Session: 9%, resets in 2h 16m")
 struct UsageBucket: Identifiable, Equatable {
     let id = UUID()
     let label: String

@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-/// A window that shows a WKWebView for the user to log in to a service.
+/// A window that shows a WKWebView for the user to log in to Claude.
 struct WebLoginView: View {
     let config: WebLoginManager.ServiceConfig
     let loginManager: WebLoginManager
@@ -9,12 +9,11 @@ struct WebLoginView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Title bar
             HStack {
                 Circle()
                     .fill(.green)
                     .frame(width: 8, height: 8)
-                Text("\(config.displayName) — Sign In")
+                Text("Claude — Sign In")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
                 Button("Cancel") {
@@ -30,12 +29,11 @@ struct WebLoginView: View {
 
             Divider()
 
-            // WebView
             WebLoginWebView(
                 config: config,
                 loginManager: loginManager,
                 onLoginDetected: {
-                    loginManager.loginCompleted(for: config.id)
+                    loginManager.loginCompleted()
                     onDismiss()
                 }
             )
@@ -53,7 +51,7 @@ struct WebLoginWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let webConfig = WKWebViewConfiguration()
-        webConfig.websiteDataStore = loginManager.dataStore(for: config.id)
+        webConfig.websiteDataStore = loginManager.dataStore
 
         let webView = WKWebView(frame: .zero, configuration: webConfig)
         webView.navigationDelegate = context.coordinator
@@ -80,13 +78,12 @@ struct WebLoginWebView: NSViewRepresentable {
         init(config: WebLoginManager.ServiceConfig, loginManager: WebLoginManager, onLoginDetected: @escaping () -> Void) {
             self.config = config
             self.loginManager = loginManager
-        self.onLoginDetected = onLoginDetected
+            self.onLoginDetected = onLoginDetected
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard !hasDetectedLogin else { return }
 
-            // Check if URL indicates successful login
             if let url = webView.url?.absoluteString,
                url.contains(config.loggedInURLPattern),
                !url.contains("login") && !url.contains("auth") {
@@ -108,10 +105,9 @@ struct WebLoginWebView: NSViewRepresentable {
             Task { @MainActor in
                 guard !hasDetectedLogin else { return }
 
-                // Give a moment for cookies to settle
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
 
-                let hasSession = await loginManager.hasValidSession(for: config.id)
+                let hasSession = await loginManager.hasValidSession()
                 if hasSession {
                     hasDetectedLogin = true
                     onLoginDetected()

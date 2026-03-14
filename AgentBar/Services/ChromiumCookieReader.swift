@@ -46,7 +46,7 @@ enum ChromiumCookieReader {
     private static var keyCache: [String: [UInt8]] = [:]
 
     /// UserDefaults key prefix for persisted passwords
-    private static let persistPrefix = "agentbar.cookieKey."
+    private static let persistPrefix = "claudebar.cookieKey."
 
     /// Clear all cached keys (memory + disk)
     static func clearKeyCache() {
@@ -73,7 +73,7 @@ enum ChromiumCookieReader {
             throw CookieError.databaseNotFound(cookiePath)
         }
 
-        let tempPath = NSTemporaryDirectory() + "agentbar_\(UUID().uuidString).db"
+        let tempPath = NSTemporaryDirectory() + "claudebar_\(UUID().uuidString).db"
         try FileManager.default.copyItem(atPath: cookiePath, toPath: tempPath)
         defer {
             try? FileManager.default.removeItem(atPath: tempPath)

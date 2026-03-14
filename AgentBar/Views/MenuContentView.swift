@@ -2,285 +2,134 @@ import SwiftUI
 
 struct MenuContentView: View {
     @Bindable var viewModel: AppViewModel
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("AgentBar")
+            // Header: Claude + status
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(viewModel.hasUsageData ? .green : .gray)
+                    .frame(width: 7, height: 7)
+
+                Text("Claude")
                     .font(.system(.headline, design: .rounded))
+
                 Spacer()
-                Text(viewModel.lastRefreshText)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
 
             Divider()
 
-            // Detected apps
-            if viewModel.hasAnyDetected {
-                VStack(spacing: 0) {
-                    ForEach(viewModel.detectedApps) { app in
-                        AppRowView(
-                            app: app,
-                            liveData: viewModel.usage(for: app),
-                            isConnected: viewModel.isConnected(app),
-                            onConnect: {
-                                viewModel.loginManager.startLogin(for: app.rawValue)
-                                openWindow(id: "login")
-                            }
-                        )
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-
-                        if app != viewModel.detectedApps.last {
-                            Divider()
-                                .padding(.horizontal, 14)
+            // Usage content
+            switch viewModel.usageData.status {
+            case .loaded where !viewModel.usageData.buckets.isEmpty:
+                ScrollView {
+                    VStack(spacing: 10) {
+                        ForEach(viewModel.usageData.buckets) { bucket in
+                            UsageBarView(bucket: bucket)
                         }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
                 }
-                .padding(.vertical, 4)
-            } else {
+                .frame(maxHeight: 320)
+
+            case .loading:
                 VStack(spacing: 6) {
-                    Image(systemName: "app.badge.checkmark")
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading usage...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 20)
+
+            case .error(let msg):
+                VStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.title3)
+                        .foregroundStyle(.orange)
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 16)
+
+            case .needsLogin:
+                VStack(spacing: 8) {
+                    Image(systemName: "person.crop.circle.badge.questionmark")
                         .font(.title2)
                         .foregroundStyle(.secondary)
-                    Text("No AI apps detected")
+                    Text("Sign in to see usage")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Text("Install Claude, ChatGPT, Cursor or Codex")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+
+                    if viewModel.isClaudeDesktopInstalled {
+                        Text("Open Claude Desktop or sign in below")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    Button("Sign in to Claude") {
+                        viewModel.startLogin()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(.blue)
                 }
                 .padding(.vertical, 16)
+
+            default:
+                EmptyView()
             }
 
             Divider()
 
-            // Web login services that aren't detected as installed
-            let unconnected = WebLoginManager.services.filter { svc in
-                !viewModel.loginManager.connectedServices.contains(svc.id) &&
-                !viewModel.detectedApps.contains(where: { $0.rawValue == svc.id })
-            }
-            if !unconnected.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(unconnected) { svc in
-                        Button {
-                            viewModel.loginManager.startLogin(for: svc.id)
-                            openWindow(id: "login")
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle")
-                                    .frame(width: 16)
-                                    .foregroundStyle(.blue)
-                                Text("Connect \(svc.displayName)")
-                                Spacer()
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 5)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 4)
-                Divider()
-            }
-
-            // Actions
-            VStack(spacing: 0) {
-                if viewModel.hasAnyDetected {
-                    actionButton(icon: "arrow.clockwise", title: "Refresh") {
-                        viewModel.refreshAll()
-                    }
-                    .disabled(viewModel.isRefreshing)
-                    .overlay(alignment: .trailing) {
-                        if viewModel.isRefreshing {
-                            ProgressView()
-                                .controlSize(.small)
-                                .padding(.trailing, 14)
-                        }
-                    }
-                }
-
-                Divider()
-                    .padding(.vertical, 2)
-
-                actionButton(icon: "xmark.circle", title: "Quit AgentBar") {
+            // Footer
+            HStack {
+                Button("Quit") {
                     NSApplication.shared.terminate(nil)
                 }
-            }
-            .padding(.vertical, 4)
-        }
-        .frame(width: 300)
-    }
+                .font(.caption)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
 
-    private func actionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .frame(width: 16)
-                    .foregroundStyle(.secondary)
-                Text(title)
                 Spacer()
+
+                if viewModel.hasUsageData && viewModel.loginManager.isConnected {
+                    Button("Disconnect") {
+                        viewModel.disconnect()
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
+            .padding(.vertical, 8)
         }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - App Row
-
-struct AppRowView: View {
-    let app: AppPreset
-    let liveData: LiveUsageData?
-    let isConnected: Bool
-    let onConnect: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Top line: icon + name + status
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 8, height: 8)
-
-                Text(app.displayName)
-                    .font(.system(.body, design: .default))
-
-                Spacer()
-
-                statusBadge
-            }
-
-            // Live usage bars
-            if let liveData = liveData {
-                switch liveData.status {
-                case .loaded where !liveData.buckets.isEmpty:
-                    VStack(spacing: 3) {
-                        ForEach(liveData.buckets) { bucket in
-                            UsageBarView(bucket: bucket)
-                        }
+        .frame(width: 300)
+        .sheet(isPresented: Binding(
+            get: { viewModel.loginManager.isLoginWindowOpen },
+            set: { viewModel.loginManager.isLoginWindowOpen = $0 }
+        )) {
+            WebLoginView(
+                config: WebLoginManager.claudeConfig,
+                loginManager: viewModel.loginManager,
+                onDismiss: {
+                    viewModel.loginManager.isLoginWindowOpen = false
+                    if viewModel.loginManager.isConnected {
+                        viewModel.onLoginCompleted()
                     }
-                    .padding(.leading, 20)
-
-                case .loading:
-                    HStack(spacing: 4) {
-                        ProgressView()
-                            .controlSize(.mini)
-                        Text("Loading...")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.leading, 20)
-
-                case .error(let msg):
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(msg)
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                            .lineLimit(2)
-
-                        // Show connect button if error and service supports web login
-                        if app.hasWebLogin && !isConnected {
-                            Button("Sign in to \(app.displayName)") {
-                                onConnect()
-                            }
-                            .font(.caption2)
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.blue)
-                        }
-                    }
-                    .padding(.leading, 20)
-
-                case .needsLogin:
-                    Button {
-                        onConnect()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.crop.circle.badge.plus")
-                                .font(.caption)
-                            Text("Sign in to \(app.displayName)")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.blue)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.leading, 20)
-
-                case .notSupported:
-                    Text("Local data only")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .padding(.leading, 20)
-
-                default:
-                    EmptyView()
                 }
-            }
+            )
         }
     }
 
-    @ViewBuilder
-    private var statusBadge: some View {
-        if let liveData = liveData {
-            switch liveData.status {
-            case .loaded:
-                let maxUsage = liveData.buckets.map(\.percentUsed).max() ?? 0
-                if maxUsage > 0 {
-                    Text("\(Int(maxUsage * 100))%")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(percentColor(maxUsage))
-                } else if isConnected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                }
-            case .loading:
-                ProgressView()
-                    .controlSize(.mini)
-            case .error:
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            case .needsLogin:
-                Text("Sign in")
-                    .font(.caption2)
-                    .foregroundStyle(.blue)
-            case .notSupported:
-                Text("Detected")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var statusColor: Color {
-        guard let liveData = liveData else { return .gray }
-        switch liveData.status {
-        case .loaded:
-            let maxUsage = liveData.buckets.map(\.percentUsed).max() ?? 0
-            if maxUsage > 0.9 { return .red }
-            if maxUsage > 0.7 { return .orange }
-            return .green
-        case .loading: return .orange
-        case .error: return .red
-        case .needsLogin: return .gray
-        case .notSupported: return .blue
-        }
-    }
-
-    private func percentColor(_ value: Double) -> Color {
-        if value > 0.9 { return .red }
-        if value > 0.7 { return .orange }
-        return .primary
-    }
 }
 
 // MARK: - Usage Bar
@@ -289,33 +138,31 @@ struct UsageBarView: View {
     let bucket: UsageBucket
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(bucket.label)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
-                if bucket.percentUsed > 0 {
-                    Text("\(Int(bucket.percentUsed * 100))%")
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(barColor)
-                }
+                Text("\(Int(bucket.percentUsed * 100))%")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(barColor)
             }
 
-            if bucket.percentUsed > 0 {
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(.quaternary)
-                            .frame(height: 4)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(.quaternary)
+                        .frame(height: 4)
 
+                    if bucket.percentUsed > 0 {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(barColor)
                             .frame(width: geometry.size.width * bucket.percentUsed, height: 4)
                     }
                 }
-                .frame(height: 4)
             }
+            .frame(height: 4)
 
             if !bucket.resetText.isEmpty {
                 Text(bucket.resetText)

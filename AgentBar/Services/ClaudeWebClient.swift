@@ -88,11 +88,11 @@ struct ClaudeWebClient {
 
         // Known usage window keys and their display labels
         let usageWindows: [(key: String, label: String)] = [
-            ("five_hour", "5-Hour Window"),
-            ("seven_day", "7-Day - All Models"),
-            ("seven_day_sonnet", "7-Day - Sonnet"),
-            ("seven_day_opus", "7-Day - Opus"),
-            ("seven_day_cowork", "7-Day - Cowork"),
+            ("five_hour", "Current Session"),
+            ("seven_day", "Weekly - All Models"),
+            ("seven_day_sonnet", "Weekly - Sonnet"),
+            ("seven_day_opus", "Weekly - Opus"),
+            ("seven_day_cowork", "Weekly - Cowork"),
         ]
 
         for window in usageWindows {
@@ -265,7 +265,7 @@ enum ClaudeError: LocalizedError {
 
 // MARK: - Network errors
 
-enum ServiceError: LocalizedError {
+enum ServiceError: LocalizedError, Equatable {
     case invalidURL
     case invalidResponse(Int)
     case unauthorized
