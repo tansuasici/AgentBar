@@ -2,6 +2,8 @@
 
 A native macOS menu bar app that shows your **Claude usage & rate limits** at a glance.
 
+<img src="screenshot.png" width="314" alt="AgentBar screenshot">
+
 ## Features
 
 - **Claude Rate Limits** — Current session %, weekly limits (all models + per-model), and extra usage credits.
