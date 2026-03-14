@@ -6,7 +6,9 @@
 
 A native macOS menu bar app that shows your **Claude usage & rate limits** at a glance.
 
-<img src="screenshot.png" width="314" alt="AgentBar screenshot">
+<p align="center">
+  <img src="screenshot.png" width="314" alt="AgentBar screenshot">
+</p>
 
 ## Features
 
