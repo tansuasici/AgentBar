@@ -1,7 +1,7 @@
 # AgentBar
 
 <p align="center">
-  <img src="icon.png" alt="AgentBar Logo" width="128" height="128" style="border-radius: 16px;">
+  <img src="icon.png" alt="AgentBar Logo" width="128" height="128">
 </p>
 
 A native macOS menu bar app that shows your **Claude usage & rate limits** at a glance.
