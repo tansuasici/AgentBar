@@ -1,17 +1,21 @@
 import Foundation
 import SwiftUI
 
-@Observable
+@MainActor @Observable
 final class AppViewModel {
-    // MARK: - Detected Apps
+    // MARK: - State
     var detectedApps: [AppPreset] = []
     var usageMap: [AppPreset: LiveUsageData] = [:]
     var isRefreshing = false
+
+    // Web login manager (shared with views)
+    let loginManager = WebLoginManager()
 
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 300 // 5 minutes
 
     private let claudeWebClient = ClaudeWebClient()
+    private let chatgptWebClient = ChatGPTWebClient()
 
     init() {
         detectApps()
@@ -20,7 +24,16 @@ final class AppViewModel {
     // MARK: - App Detection
 
     func detectApps() {
-        detectedApps = AppPreset.installedApps
+        var apps = AppPreset.installedApps
+
+        // Also include web-connected services even if desktop app not installed
+        for serviceId in loginManager.connectedServices {
+            if let preset = AppPreset(rawValue: serviceId), !apps.contains(preset) {
+                apps.append(preset)
+            }
+        }
+
+        detectedApps = apps
     }
 
     // MARK: - Auto Refresh
@@ -43,7 +56,6 @@ final class AppViewModel {
         guard !isRefreshing else { return }
         isRefreshing = true
 
-        // Re-detect apps on each refresh
         detectApps()
 
         Task { @MainActor in
@@ -70,21 +82,16 @@ final class AppViewModel {
 
             switch app {
             case .claude:
-                // Claude uses web API with auto-read cookies
-                buckets = try await claudeWebClient.fetchUsageFromDesktop()
+                buckets = try await fetchClaude()
 
             case .chatgpt:
-                // ChatGPT reads local data (WebKit, UserDefaults, filesystem)
-                let data = try ChatGPTLocalReader.readLocalData()
-                buckets = ChatGPTLocalReader.toBuckets(data)
+                buckets = try await fetchChatGPT()
 
             case .cursor:
-                // Cursor reads from state.vscdb SQLite
                 let data = try CursorLocalReader.readLocalData()
                 buckets = CursorLocalReader.toBuckets(data)
 
             case .codex:
-                // Codex reads from log files
                 let data = try CodexLocalReader.readLocalData()
                 buckets = CodexLocalReader.toBuckets(data)
             }
@@ -107,11 +114,59 @@ final class AppViewModel {
         }
     }
 
+    // MARK: - Claude
+
+    private func fetchClaude() async throws -> [UsageBucket] {
+        // Primary: web login cookies (no Keychain needed)
+        if loginManager.connectedServices.contains("claude") {
+            if let cookieHeader = await loginManager.getCookieHeader(for: "claude") {
+                do {
+                    return try await claudeWebClient.fetchUsageFromWebLogin(cookieHeader: cookieHeader)
+                } catch {
+                    // If session expired, clear connection
+                    if case ServiceError.unauthorized = error {
+                        await MainActor.run { loginManager.disconnect(serviceId: "claude") }
+                    }
+                    throw error
+                }
+            }
+        }
+
+        // Fallback: desktop app cookie (if Claude Desktop installed)
+        return try await claudeWebClient.fetchUsageFromDesktop()
+    }
+
+    // MARK: - ChatGPT
+
+    private func fetchChatGPT() async throws -> [UsageBucket] {
+        // Primary: web login cookies
+        if loginManager.connectedServices.contains("chatgpt") {
+            if let cookieHeader = await loginManager.getCookieHeader(for: "chatgpt") {
+                do {
+                    return try await chatgptWebClient.fetchUsage(cookieHeader: cookieHeader)
+                } catch {
+                    if case ChatGPTWebError.sessionExpired = error {
+                        await MainActor.run { loginManager.disconnect(serviceId: "chatgpt") }
+                    }
+                    throw error
+                }
+            }
+        }
+
+        // Fallback: local data from ChatGPT.app
+        let data = try ChatGPTLocalReader.readLocalData()
+        return ChatGPTLocalReader.toBuckets(data)
+    }
+
+    // MARK: - Helpers
+
     func usage(for app: AppPreset) -> LiveUsageData? {
         usageMap[app]
     }
 
-    // MARK: - Computed
+    func isConnected(_ app: AppPreset) -> Bool {
+        loginManager.connectedServices.contains(app.rawValue)
+    }
 
     var hasAnyDetected: Bool {
         !detectedApps.isEmpty

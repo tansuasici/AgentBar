@@ -32,9 +32,18 @@ enum AppPreset: String, CaseIterable, Identifiable, Codable, Hashable {
     var supportsLiveTracking: Bool {
         switch self {
         case .claude: true   // Web API via cookies
-        case .chatgpt: true  // Local data (WebKit, UserDefaults, filesystem)
+        case .chatgpt: true  // Local data or web API
         case .cursor: true   // Local data (state.vscdb SQLite)
         case .codex: true    // Local data (log files)
+        }
+    }
+
+    /// Whether this service supports web login for richer data
+    var hasWebLogin: Bool {
+        switch self {
+        case .claude: true
+        case .chatgpt: true
+        default: false
         }
     }
 

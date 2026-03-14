@@ -1,11 +1,23 @@
 import Foundation
 
 /// Client that fetches usage data from claude.ai.
-/// Automatically reads cookies from Claude Desktop's local data.
+/// Supports two auth methods:
+/// 1. Web login via WKWebView (primary — no Keychain needed)
+/// 2. Desktop cookie auto-read (fallback — requires Keychain access)
 struct ClaudeWebClient {
     private let baseURL = "https://claude.ai"
 
-    /// Fetch usage by auto-reading cookies from Claude Desktop
+    /// Fetch usage using web login cookies (primary method)
+    func fetchUsageFromWebLogin(cookieHeader: String) async throws -> [UsageBucket] {
+        guard !cookieHeader.isEmpty else {
+            throw ClaudeError.noCookies
+        }
+
+        let orgId = try await fetchOrganizationId(cookieHeader: cookieHeader)
+        return try await fetchUsage(orgId: orgId, cookieHeader: cookieHeader)
+    }
+
+    /// Fetch usage by auto-reading cookies from Claude Desktop (fallback)
     func fetchUsageFromDesktop() async throws -> [UsageBucket] {
         guard ChromiumCookieReader.isClaudeDesktopInstalled else {
             throw ClaudeError.appNotInstalled
@@ -16,28 +28,6 @@ struct ClaudeWebClient {
 
         guard !cookieHeader.isEmpty else {
             throw ClaudeError.noCookies
-        }
-
-        // Get org ID from cookies or API
-        let orgId = try await fetchOrganizationId(cookieHeader: cookieHeader)
-
-        // Fetch usage data
-        return try await fetchUsage(orgId: orgId, cookieHeader: cookieHeader)
-    }
-
-    /// Fetch usage with manually provided session key (fallback)
-    func fetchUsage(sessionKey: String) async throws -> [UsageBucket] {
-        let cookies = try ChromiumCookieReader.readClaudeDesktopCookies()
-        var cookieHeader = buildCookieHeader(from: cookies)
-
-        // Override sessionKey if manually provided
-        if !sessionKey.isEmpty {
-            let filtered = cookies.filter { $0.name != "sessionKey" }
-            cookieHeader = buildCookieHeader(from: filtered) + "; sessionKey=\(sessionKey)"
-        }
-
-        if cookieHeader.isEmpty {
-            cookieHeader = "sessionKey=\(sessionKey)"
         }
 
         let orgId = try await fetchOrganizationId(cookieHeader: cookieHeader)

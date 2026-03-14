@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuContentView: View {
     @Bindable var viewModel: AppViewModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +26,12 @@ struct MenuContentView: View {
                     ForEach(viewModel.detectedApps) { app in
                         AppRowView(
                             app: app,
-                            liveData: viewModel.usage(for: app)
+                            liveData: viewModel.usage(for: app),
+                            isConnected: viewModel.isConnected(app),
+                            onConnect: {
+                                viewModel.loginManager.startLogin(for: app.rawValue)
+                                openWindow(id: "login")
+                            }
                         )
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -38,7 +44,6 @@ struct MenuContentView: View {
                 }
                 .padding(.vertical, 4)
             } else {
-                // Empty state
                 VStack(spacing: 6) {
                     Image(systemName: "app.badge.checkmark")
                         .font(.title2)
@@ -54,6 +59,36 @@ struct MenuContentView: View {
             }
 
             Divider()
+
+            // Web login services that aren't detected as installed
+            let unconnected = WebLoginManager.services.filter { svc in
+                !viewModel.loginManager.connectedServices.contains(svc.id) &&
+                !viewModel.detectedApps.contains(where: { $0.rawValue == svc.id })
+            }
+            if !unconnected.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(unconnected) { svc in
+                        Button {
+                            viewModel.loginManager.startLogin(for: svc.id)
+                            openWindow(id: "login")
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle")
+                                    .frame(width: 16)
+                                    .foregroundStyle(.blue)
+                                Text("Connect \(svc.displayName)")
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 4)
+                Divider()
+            }
 
             // Actions
             VStack(spacing: 0) {
@@ -105,6 +140,8 @@ struct MenuContentView: View {
 struct AppRowView: View {
     let app: AppPreset
     let liveData: LiveUsageData?
+    let isConnected: Bool
+    let onConnect: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -144,14 +181,26 @@ struct AppRowView: View {
                     .padding(.leading, 20)
 
                 case .error(let msg):
-                    Text(msg)
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                        .lineLimit(2)
-                        .padding(.leading, 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(msg)
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+
+                        // Show connect button if error and service supports web login
+                        if app.hasWebLogin && !isConnected {
+                            Button("Sign in to \(app.displayName)") {
+                                onConnect()
+                            }
+                            .font(.caption2)
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.blue)
+                        }
+                    }
+                    .padding(.leading, 20)
 
                 case .notSupported:
-                    Text("Live tracking coming soon")
+                    Text("Local data only")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .padding(.leading, 20)
@@ -169,9 +218,15 @@ struct AppRowView: View {
             switch liveData.status {
             case .loaded:
                 let maxUsage = liveData.buckets.map(\.percentUsed).max() ?? 0
-                Text("\(Int(maxUsage * 100))%")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(percentColor(maxUsage))
+                if maxUsage > 0 {
+                    Text("\(Int(maxUsage * 100))%")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(percentColor(maxUsage))
+                } else if isConnected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
             case .loading:
                 ProgressView()
                     .controlSize(.mini)
@@ -220,23 +275,27 @@ struct UsageBarView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(Int(bucket.percentUsed * 100))%")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(barColor)
-            }
-
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(.quaternary)
-                        .frame(height: 4)
-
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(barColor)
-                        .frame(width: geometry.size.width * bucket.percentUsed, height: 4)
+                if bucket.percentUsed > 0 {
+                    Text("\(Int(bucket.percentUsed * 100))%")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(barColor)
                 }
             }
-            .frame(height: 4)
+
+            if bucket.percentUsed > 0 {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(.quaternary)
+                            .frame(height: 4)
+
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(barColor)
+                            .frame(width: geometry.size.width * bucket.percentUsed, height: 4)
+                    }
+                }
+                .frame(height: 4)
+            }
 
             if !bucket.resetText.isEmpty {
                 Text(bucket.resetText)
