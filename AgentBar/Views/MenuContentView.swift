@@ -123,7 +123,7 @@ struct MenuContentView: View {
                 onDismiss: {
                     viewModel.loginManager.isLoginWindowOpen = false
                     if viewModel.loginManager.isConnected {
-                        viewModel.onLoginCompleted()
+                        viewModel.refreshUsage()
                     }
                 }
             )

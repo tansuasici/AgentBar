@@ -94,14 +94,6 @@ final class AppViewModel {
 
     // MARK: - Helpers
 
-    var lastRefreshText: String {
-        guard usageData.status == .loaded else { return "" }
-
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: usageData.lastUpdated, relativeTo: Date())
-    }
-
     var hasUsageData: Bool {
         usageData.status == .loaded && !usageData.buckets.isEmpty
     }
