@@ -5,7 +5,7 @@ A native macOS menu bar app that shows your **Claude usage & rate limits** at a 
 ## Features
 
 - **Claude Rate Limits** — Current session %, weekly limits (all models + per-model), and extra usage credits.
-- **Zero Configuration** — Sign in once, see your usage instantly.
+- **Simple Setup** — Auto-detects Claude Desktop cookies, or sign in once manually.
 - **Menu Bar Native** — Lives in your macOS menu bar, one click to open.
 - **Auto-Refresh** — Updates automatically every few minutes.
 - **Local-First** — All data stays on your device. No servers, no telemetry.
@@ -14,21 +14,12 @@ A native macOS menu bar app that shows your **Claude usage & rate limits** at a 
 
 Download the latest DMG from [Releases](https://github.com/tansuasici/AgentBar/releases), open it, and drag AgentBar to Applications.
 
-## Build from Source
-
-```bash
-git clone https://github.com/tansuasici/AgentBar.git
-cd AgentBar
-open AgentBar.xcodeproj
-# Build & Run (Cmd+R) in Xcode
-```
-
 Requires macOS 14.0 (Sonoma) or later.
 
 ## How It Works
 
-1. Sign in with your Claude account via the built-in browser
-2. AgentBar reads your usage data from the Claude API
+1. If Claude Desktop is installed, usage data is fetched automatically (no sign-in needed)
+2. Otherwise, sign in once with your Claude account via the built-in browser
 3. Displays session usage, weekly limits, and extra credits in a compact menu bar popup
 
 ## Privacy
