@@ -22,5 +22,9 @@
     <true/>
     <key>LSMinimumSystemVersion</key>
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Tansu Asici. All rights reserved.</string>
+    <key>CFBundleGetInfoString</key>
+    <string>AgentBar - Claude usage tracker for macOS menu bar</string>
 </dict>
 </plist>
