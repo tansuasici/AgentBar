@@ -87,6 +87,45 @@ struct MenuContentView: View {
                 EmptyView()
             }
 
+            // Update banner
+            if viewModel.updateChecker.isUpdateAvailable,
+               let version = viewModel.updateChecker.latestVersion {
+                Divider()
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                    Text("v\(version) available")
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Button("Download") {
+                        viewModel.updateChecker.openDownload()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.mini)
+                    .tint(.blue)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+            }
+
+            Divider()
+
+            // Settings
+            HStack {
+                Toggle("Launch at Login", isOn: Binding(
+                    get: { viewModel.launchAtLogin },
+                    set: { viewModel.launchAtLogin = $0 }
+                ))
+                .font(.caption)
+                .toggleStyle(.checkbox)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+
             Divider()
 
             // Footer
