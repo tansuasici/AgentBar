@@ -21,6 +21,9 @@ struct WebLoginWebView: NSViewRepresentable {
         let request = URLRequest(url: config.loginURL)
         webView.load(request)
 
+        // Start polling for login (handles SPA route changes that don't trigger didFinish)
+        context.coordinator.startPolling()
+
         return webView
     }
 
@@ -35,9 +38,9 @@ struct WebLoginWebView: NSViewRepresentable {
         let loginManager: WebLoginManager
         let onLoginDetected: () -> Void
         private var hasDetectedLogin = false
-        /// Number of main-frame navigations seen (skip the first one to avoid
-        /// false positives from the initial auth→main-page redirect).
-        private var mainFrameNavigationCount = 0
+        private var pollTimer: Timer?
+        /// Set to true after the initial page finishes loading (avoids false positive on first redirect)
+        private var initialLoadDone = false
 
         init(config: WebLoginManager.ServiceConfig, loginManager: WebLoginManager, onLoginDetected: @escaping () -> Void) {
             self.config = config
@@ -45,9 +48,34 @@ struct WebLoginWebView: NSViewRepresentable {
             self.onLoginDetected = onLoginDetected
         }
 
+        deinit {
+            pollTimer?.invalidate()
+        }
+
+        // MARK: - Polling (primary detection for SPAs like ChatGPT)
+
+        func startPolling() {
+            // Poll every 3 seconds to check if the user has logged in.
+            // This handles SPA client-side navigations that don't trigger didFinish.
+            pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+                self?.pollForLogin()
+            }
+        }
+
+        private func pollForLogin() {
+            guard !hasDetectedLogin, initialLoadDone else { return }
+            checkCookiesAndComplete()
+        }
+
+        // MARK: - WKNavigationDelegate (fast path for full navigations)
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            if !initialLoadDone {
+                initialLoadDone = true
+                return // Skip the first load (auth page itself)
+            }
+
             guard !hasDetectedLogin else { return }
-            mainFrameNavigationCount += 1
 
             if let url = webView.url?.absoluteString,
                isLoggedInURL(url) {
@@ -56,35 +84,20 @@ struct WebLoginWebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-            guard navigationAction.targetFrame?.isMainFrame == true else {
-                return .allow
-            }
-            return .allow
+            .allow
         }
 
-        /// Check if the URL looks like a logged-in page.
+        // MARK: - Login Detection
+
         private func isLoggedInURL(_ url: String) -> Bool {
-            guard url.contains(config.loggedInURLPattern),
-                  !url.contains("login"),
-                  !url.contains("auth") else {
-                return false
-            }
-
-            // Skip the very first navigation (initial redirect from /auth/login → /)
-            // For services with API validation, the API call is the real gate.
-            if config.sessionValidationPath != nil && mainFrameNavigationCount <= 1 {
-                return false
-            }
-
-            return true
+            url.contains(config.loggedInURLPattern)
+                && !url.contains("login")
+                && !url.contains("auth")
         }
 
         private func checkCookiesAndComplete() {
             Task { @MainActor in
                 guard !hasDetectedLogin else { return }
-
-                // Wait for cookies to settle
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
 
                 let hasSession = await loginManager.hasValidSession()
                 guard hasSession else { return }
@@ -101,11 +114,12 @@ struct WebLoginWebView: NSViewRepresentable {
                 }
 
                 hasDetectedLogin = true
+                pollTimer?.invalidate()
                 onLoginDetected()
             }
         }
 
-        /// Call the session API to verify the login is real (not just a redirect cookie).
+        /// Call the session API to verify the login is real.
         private func validateSessionWithAPI(cookieHeader: String, baseURL: String, path: String) async -> Bool {
             guard let url = URL(string: baseURL + path) else { return false }
 
