@@ -4,16 +4,23 @@ import ServiceManagement
 
 @MainActor @Observable
 final class AppViewModel {
-    // MARK: - State
-    var usageData: LiveUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
-    var isRefreshing = false
+    // MARK: - Claude State
+    var claudeUsageData: LiveUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+    var isClaudeRefreshing = false
     var isClaudeDesktopInstalled = false
+
+    // MARK: - ChatGPT State
+    var chatGPTUsageData: LiveUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+    var isChatGPTRefreshing = false
 
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 300
 
     private let claudeWebClient = ClaudeWebClient()
-    let loginManager = WebLoginManager()
+    private let chatGPTWebClient = ChatGPTWebClient()
+
+    let claudeLoginManager = WebLoginManager(config: WebLoginManager.claudeConfig)
+    let chatGPTLoginManager = WebLoginManager(config: WebLoginManager.chatGPTConfig)
     let updateChecker = UpdateChecker()
 
     // MARK: - Launch at Login
@@ -28,7 +35,6 @@ final class AppViewModel {
                     try SMAppService.mainApp.unregister()
                 }
             } catch {
-                // Revert on failure
                 launchAtLogin = oldValue
             }
         }
@@ -42,11 +48,11 @@ final class AppViewModel {
     // MARK: - Auto Refresh
 
     func startAutoRefresh() {
-        refreshUsage()
+        refreshAll()
         updateChecker.checkForUpdates()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.refreshUsage()
+                self?.refreshAll()
             }
         }
     }
@@ -56,67 +62,127 @@ final class AppViewModel {
         refreshTimer = nil
     }
 
-    // MARK: - Refresh Usage
+    private func refreshAll() {
+        refreshClaudeUsage()
+        refreshChatGPTUsage()
+    }
 
-    func refreshUsage() {
-        guard !isRefreshing else { return }
-        isRefreshing = true
+    // MARK: - Claude Refresh
+
+    func refreshClaudeUsage() {
+        guard !isClaudeRefreshing else { return }
+        isClaudeRefreshing = true
 
         Task { @MainActor in
-            usageData = .loading()
+            claudeUsageData = .loading()
 
             do {
                 let buckets: [UsageBucket]
 
-                // Try web login cookies first (primary method)
-                if loginManager.isConnected,
-                   let cookieHeader = await loginManager.getCookieHeader() {
+                if claudeLoginManager.isConnected,
+                   let cookieHeader = await claudeLoginManager.getCookieHeader() {
                     buckets = try await claudeWebClient.fetchUsageFromWebLogin(cookieHeader: cookieHeader)
                 }
-                // Fallback: read Claude Desktop cookies
                 else if isClaudeDesktopInstalled {
                     buckets = try await claudeWebClient.fetchUsageFromDesktop()
                 }
                 else {
-                    usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
-                    isRefreshing = false
+                    claudeUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+                    isClaudeRefreshing = false
                     return
                 }
 
-                usageData = LiveUsageData(
+                claudeUsageData = LiveUsageData(
                     buckets: buckets,
                     status: .loaded,
                     lastUpdated: Date()
                 )
             } catch let error as ServiceError where error == .unauthorized {
-                usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+                claudeUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
             } catch {
-                usageData = .error(message: error.localizedDescription)
+                claudeUsageData = .error(message: error.localizedDescription)
             }
 
-            isRefreshing = false
+            isClaudeRefreshing = false
         }
     }
 
-    // MARK: - Login
+    // MARK: - ChatGPT Refresh
 
-    func startLogin() {
-        loginManager.startLogin()
+    func refreshChatGPTUsage() {
+        guard !isChatGPTRefreshing else { return }
+        guard chatGPTLoginManager.isConnected else {
+            chatGPTUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+            return
+        }
+        isChatGPTRefreshing = true
+
+        Task { @MainActor in
+            chatGPTUsageData = .loading()
+
+            do {
+                guard let cookieHeader = await chatGPTLoginManager.getCookieHeader() else {
+                    chatGPTUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+                    isChatGPTRefreshing = false
+                    return
+                }
+
+                let buckets = try await chatGPTWebClient.fetchUsage(cookieHeader: cookieHeader)
+
+                chatGPTUsageData = LiveUsageData(
+                    buckets: buckets,
+                    status: buckets.isEmpty ? .loaded : .loaded,
+                    lastUpdated: Date()
+                )
+            } catch let error as ServiceError where error == .unauthorized {
+                chatGPTUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+            } catch {
+                chatGPTUsageData = .error(message: error.localizedDescription)
+            }
+
+            isChatGPTRefreshing = false
+        }
     }
 
-    func onLoginCompleted() {
-        loginManager.loginCompleted()
-        refreshUsage()
+    // MARK: - Claude Login
+
+    func startClaudeLogin() {
+        claudeLoginManager.startLogin()
     }
 
-    func disconnect() {
-        loginManager.disconnect()
-        usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+    func onClaudeLoginCompleted() {
+        claudeLoginManager.loginCompleted()
+        refreshClaudeUsage()
+    }
+
+    func disconnectClaude() {
+        claudeLoginManager.disconnect()
+        claudeUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+    }
+
+    // MARK: - ChatGPT Login
+
+    func startChatGPTLogin() {
+        chatGPTLoginManager.startLogin()
+    }
+
+    func onChatGPTLoginCompleted() {
+        chatGPTLoginManager.loginCompleted()
+        refreshChatGPTUsage()
+    }
+
+    func disconnectChatGPT() {
+        chatGPTLoginManager.disconnect()
+        chatGPTUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
     }
 
     // MARK: - Helpers
 
-    var hasUsageData: Bool {
-        usageData.status == .loaded && !usageData.buckets.isEmpty
+    var hasClaudeData: Bool {
+        claudeUsageData.status == .loaded && !claudeUsageData.buckets.isEmpty
+    }
+
+    var hasChatGPTData: Bool {
+        chatGPTUsageData.status == .loaded && !chatGPTUsageData.buckets.isEmpty
     }
 }

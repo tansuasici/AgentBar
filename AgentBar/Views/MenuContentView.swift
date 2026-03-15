@@ -5,89 +5,43 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header: Claude + status
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(viewModel.hasUsageData ? .green : .gray)
-                    .frame(width: 7, height: 7)
 
-                Text("Claude")
-                    .font(.system(.headline, design: .rounded))
-
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-
+            // ── Claude Section ──────────────────────────
+            ServiceHeaderView(name: "Claude", isConnected: viewModel.hasClaudeData)
             Divider()
-
-            // Usage content
-            switch viewModel.usageData.status {
-            case .loaded where !viewModel.usageData.buckets.isEmpty:
-                ScrollView {
-                    VStack(spacing: 10) {
-                        ForEach(viewModel.usageData.buckets) { bucket in
-                            UsageBarView(bucket: bucket)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+            UsageSectionView(
+                usageData: viewModel.claudeUsageData,
+                isDesktopInstalled: viewModel.isClaudeDesktopInstalled,
+                desktopHint: "Open Claude Desktop or sign in below",
+                signInLabel: "Sign in to Claude",
+                onSignIn: {
+                    LoginWindowController.shared.open(
+                        config: WebLoginManager.claudeConfig,
+                        loginManager: viewModel.claudeLoginManager,
+                        onComplete: { viewModel.refreshClaudeUsage() }
+                    )
                 }
-                .frame(maxHeight: 320)
+            )
 
-            case .loading:
-                VStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading usage...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            // ── ChatGPT Section ─────────────────────────
+            Divider()
+            ServiceHeaderView(name: "ChatGPT", isConnected: viewModel.hasChatGPTData)
+            Divider()
+            UsageSectionView(
+                usageData: viewModel.chatGPTUsageData,
+                isDesktopInstalled: false,
+                desktopHint: nil,
+                signInLabel: "Sign in to ChatGPT",
+                onSignIn: {
+                    LoginWindowController.shared.open(
+                        config: WebLoginManager.chatGPTConfig,
+                        loginManager: viewModel.chatGPTLoginManager,
+                        onComplete: { viewModel.refreshChatGPTUsage() }
+                    )
                 }
-                .padding(.vertical, 20)
+            )
 
-            case .error(let msg):
-                VStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
-                    Text(msg)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 16)
-
-            case .needsLogin:
-                VStack(spacing: 8) {
-                    Image(systemName: "person.crop.circle.badge.questionmark")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                    Text("Sign in to see usage")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-
-                    if viewModel.isClaudeDesktopInstalled {
-                        Text("Open Claude Desktop or sign in below")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-
-                    Button("Sign in to Claude") {
-                        viewModel.startLogin()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(.blue)
-                }
-                .padding(.vertical, 16)
-
-            default:
-                EmptyView()
-            }
-
-            // Update banner
+            // ── Update Banner ───────────────────────────
             if viewModel.updateChecker.isUpdateAvailable,
                let version = viewModel.updateChecker.latestVersion {
                 Divider()
@@ -113,7 +67,7 @@ struct MenuContentView: View {
 
             Divider()
 
-            // Settings
+            // ── Settings ────────────────────────────────
             HStack {
                 Toggle("Launch at Login", isOn: Binding(
                     get: { viewModel.launchAtLogin },
@@ -128,7 +82,7 @@ struct MenuContentView: View {
 
             Divider()
 
-            // Footer
+            // ── Footer ──────────────────────────────────
             HStack {
                 Button("Quit") {
                     NSApplication.shared.terminate(nil)
@@ -139,9 +93,18 @@ struct MenuContentView: View {
 
                 Spacer()
 
-                if viewModel.hasUsageData && viewModel.loginManager.isConnected {
-                    Button("Disconnect") {
-                        viewModel.disconnect()
+                if viewModel.hasClaudeData && viewModel.claudeLoginManager.isConnected {
+                    Button("Disconnect Claude") {
+                        viewModel.disconnectClaude()
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
+
+                if viewModel.hasChatGPTData && viewModel.chatGPTLoginManager.isConnected {
+                    Button("Disconnect ChatGPT") {
+                        viewModel.disconnectChatGPT()
                     }
                     .font(.caption2)
                     .buttonStyle(.plain)
@@ -152,23 +115,107 @@ struct MenuContentView: View {
             .padding(.vertical, 8)
         }
         .frame(width: 300)
-        .sheet(isPresented: Binding(
-            get: { viewModel.loginManager.isLoginWindowOpen },
-            set: { viewModel.loginManager.isLoginWindowOpen = $0 }
-        )) {
-            WebLoginView(
-                config: WebLoginManager.claudeConfig,
-                loginManager: viewModel.loginManager,
-                onDismiss: {
-                    viewModel.loginManager.isLoginWindowOpen = false
-                    if viewModel.loginManager.isConnected {
-                        viewModel.refreshUsage()
+    }
+}
+
+// MARK: - Service Header
+
+struct ServiceHeaderView: View {
+    let name: String
+    let isConnected: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(isConnected ? .green : .gray)
+                .frame(width: 7, height: 7)
+
+            Text(name)
+                .font(.system(.headline, design: .rounded))
+
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+}
+
+// MARK: - Usage Section (reusable for any service)
+
+struct UsageSectionView: View {
+    let usageData: LiveUsageData
+    let isDesktopInstalled: Bool
+    let desktopHint: String?
+    let signInLabel: String
+    let onSignIn: () -> Void
+
+    var body: some View {
+        switch usageData.status {
+        case .loaded where !usageData.buckets.isEmpty:
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(usageData.buckets) { bucket in
+                        UsageBarView(bucket: bucket)
                     }
                 }
-            )
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+            }
+            .frame(maxHeight: 200)
+
+        case .loaded:
+            VStack(spacing: 4) {
+                Image(systemName: "checkmark.circle")
+                    .font(.title3)
+                    .foregroundStyle(.green)
+                Text("No usage in current windows")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 12)
+
+        case .loading:
+            VStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading usage...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 12)
+
+        case .error(let msg):
+            VStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+                Text(msg)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+        case .needsLogin:
+            VStack(spacing: 6) {
+                if isDesktopInstalled, let hint = desktopHint {
+                    Text(hint)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Button(signInLabel) {
+                    onSignIn()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(.blue)
+            }
+            .padding(.vertical, 10)
         }
     }
-
 }
 
 // MARK: - Usage Bar
