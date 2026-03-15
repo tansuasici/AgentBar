@@ -22,12 +22,6 @@ A native macOS menu bar app that shows your **Claude usage & rate limits** at a 
 
 Download the latest DMG from [Releases](https://github.com/tansuasici/AgentBar/releases), open it, and drag AgentBar to Applications.
 
-> **Note:** Since AgentBar is not notarized with an Apple Developer ID, macOS may show a warning on first launch. To fix this, run:
-> ```bash
-> xattr -cr /Applications/AgentBar.app
-> ```
-> Then open AgentBar normally.
-
 Requires macOS 14.0 (Sonoma) or later.
 
 ## How It Works

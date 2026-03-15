@@ -69,9 +69,6 @@ mkdir -p "$STAGING_DIR"
 # Copy app
 cp -R "$APP_PATH" "$STAGING_DIR/"
 
-# Create Applications symlink (for drag-and-drop install)
-ln -s /Applications "$STAGING_DIR/Applications"
-
 # Remove old DMG if exists
 rm -f "$DMG_PATH"
 
@@ -84,15 +81,15 @@ if command -v create-dmg &>/dev/null; then
         --window-size 600 400 \
         --icon-size 128 \
         --icon "$APP_NAME.app" 150 185 \
-        --icon "Applications" 450 185 \
         --hide-extension "$APP_NAME.app" \
         --app-drop-link 450 185 \
         --no-internet-enable \
         "$DMG_PATH" \
         "$STAGING_DIR"
 else
-    # Fallback: basic hdiutil DMG
+    # Fallback: basic hdiutil DMG (needs manual Applications symlink)
     echo "    (install 'create-dmg' for a polished DMG: brew install create-dmg)"
+    ln -s /Applications "$STAGING_DIR/Applications"
 
     hdiutil create \
         -volname "$APP_NAME" \
@@ -105,7 +102,19 @@ fi
 # Clean up staging
 rm -rf "$STAGING_DIR"
 
+# ── Notarize DMG ─────────────────────────────────────────────────
+
+NOTARY_PROFILE="AgentBar"
+
+echo "==> Notarizing DMG..."
+xcrun notarytool submit "$DMG_PATH" \
+    --keychain-profile "$NOTARY_PROFILE" \
+    --wait
+
+echo "==> Stapling notarization ticket..."
+xcrun stapler staple "$DMG_PATH"
+
 DMG_SIZE=$(du -h "$DMG_PATH" | cut -f1 | xargs)
 echo ""
-echo "==> Done! DMG created at:"
+echo "==> Done! Signed & notarized DMG created at:"
 echo "    $DMG_PATH ($DMG_SIZE)"
