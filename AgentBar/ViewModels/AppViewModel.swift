@@ -17,7 +17,7 @@ final class AppViewModel {
     private let refreshInterval: TimeInterval = 300
 
     private let claudeWebClient = ClaudeWebClient()
-    private let chatGPTWebClient = ChatGPTWebClient()
+    private var chatGPTWebClient: ChatGPTWebClient?
 
     let claudeLoginManager = WebLoginManager(config: WebLoginManager.claudeConfig)
     let chatGPTLoginManager = WebLoginManager(config: WebLoginManager.chatGPTConfig)
@@ -43,6 +43,7 @@ final class AppViewModel {
     init() {
         isClaudeDesktopInstalled = ChromiumCookieReader.isClaudeDesktopInstalled
         launchAtLogin = SMAppService.mainApp.status == .enabled
+        chatGPTWebClient = ChatGPTWebClient(dataStore: chatGPTLoginManager.dataStore)
     }
 
     // MARK: - Auto Refresh
@@ -121,17 +122,17 @@ final class AppViewModel {
             chatGPTUsageData = .loading()
 
             do {
-                guard let cookieHeader = await chatGPTLoginManager.getCookieHeader() else {
+                guard let client = chatGPTWebClient else {
                     chatGPTUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
                     isChatGPTRefreshing = false
                     return
                 }
 
-                let buckets = try await chatGPTWebClient.fetchUsage(cookieHeader: cookieHeader)
+                let buckets = try await client.fetchUsage()
 
                 chatGPTUsageData = LiveUsageData(
                     buckets: buckets,
-                    status: buckets.isEmpty ? .loaded : .loaded,
+                    status: .loaded,
                     lastUpdated: Date()
                 )
             } catch let error as ServiceError where error == .unauthorized {
@@ -172,6 +173,7 @@ final class AppViewModel {
     }
 
     func disconnectChatGPT() {
+        chatGPTWebClient?.invalidate()
         chatGPTLoginManager.disconnect()
         chatGPTUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
     }

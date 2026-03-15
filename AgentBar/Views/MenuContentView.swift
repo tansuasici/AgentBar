@@ -6,40 +6,59 @@ struct MenuContentView: View {
     var body: some View {
         VStack(spacing: 0) {
 
-            // ── Claude Section ──────────────────────────
-            ServiceHeaderView(name: "Claude", isConnected: viewModel.hasClaudeData)
-            Divider()
-            UsageSectionView(
-                usageData: viewModel.claudeUsageData,
-                isDesktopInstalled: viewModel.isClaudeDesktopInstalled,
-                desktopHint: "Open Claude Desktop or sign in below",
-                signInLabel: "Sign in to Claude",
-                onSignIn: {
-                    LoginWindowController.shared.open(
-                        config: WebLoginManager.claudeConfig,
-                        loginManager: viewModel.claudeLoginManager,
-                        onComplete: { viewModel.refreshClaudeUsage() }
-                    )
-                }
-            )
+            // ── Scrollable Usage Area ─────────────────────
+            ScrollView {
+                VStack(spacing: 0) {
 
-            // ── ChatGPT Section ─────────────────────────
-            Divider()
-            ServiceHeaderView(name: "ChatGPT", isConnected: viewModel.hasChatGPTData)
-            Divider()
-            UsageSectionView(
-                usageData: viewModel.chatGPTUsageData,
-                isDesktopInstalled: false,
-                desktopHint: nil,
-                signInLabel: "Sign in to ChatGPT",
-                onSignIn: {
-                    LoginWindowController.shared.open(
-                        config: WebLoginManager.chatGPTConfig,
-                        loginManager: viewModel.chatGPTLoginManager,
-                        onComplete: { viewModel.refreshChatGPTUsage() }
+                    // ── Claude ─────────────────────────────
+                    ServiceHeaderView(
+                        name: "Claude",
+                        isConnected: viewModel.hasClaudeData,
+                        onDisconnect: viewModel.hasClaudeData ? {
+                            viewModel.disconnectClaude()
+                        } : nil
+                    )
+                    Divider()
+                    UsageSectionView(
+                        usageData: viewModel.claudeUsageData,
+                        isDesktopInstalled: viewModel.isClaudeDesktopInstalled,
+                        desktopHint: "Open Claude Desktop or sign in below",
+                        signInLabel: "Sign in to Claude",
+                        onSignIn: {
+                            LoginWindowController.shared.open(
+                                config: WebLoginManager.claudeConfig,
+                                loginManager: viewModel.claudeLoginManager,
+                                onComplete: { viewModel.refreshClaudeUsage() }
+                            )
+                        }
+                    )
+
+                    // ── ChatGPT ────────────────────────────
+                    Divider()
+                    ServiceHeaderView(
+                        name: "ChatGPT",
+                        isConnected: viewModel.hasChatGPTData,
+                        onDisconnect: viewModel.hasChatGPTData ? {
+                            viewModel.disconnectChatGPT()
+                        } : nil
+                    )
+                    Divider()
+                    UsageSectionView(
+                        usageData: viewModel.chatGPTUsageData,
+                        isDesktopInstalled: false,
+                        desktopHint: nil,
+                        signInLabel: "Sign in to ChatGPT",
+                        onSignIn: {
+                            LoginWindowController.shared.open(
+                                config: WebLoginManager.chatGPTConfig,
+                                loginManager: viewModel.chatGPTLoginManager,
+                                onComplete: { viewModel.refreshChatGPTUsage() }
+                            )
+                        }
                     )
                 }
-            )
+            }
+            .frame(maxHeight: 400)
 
             // ── Update Banner ───────────────────────────
             if viewModel.updateChecker.isUpdateAvailable,
@@ -93,23 +112,6 @@ struct MenuContentView: View {
 
                 Spacer()
 
-                if viewModel.hasClaudeData && viewModel.claudeLoginManager.isConnected {
-                    Button("Disconnect Claude") {
-                        viewModel.disconnectClaude()
-                    }
-                    .font(.caption2)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                }
-
-                if viewModel.hasChatGPTData && viewModel.chatGPTLoginManager.isConnected {
-                    Button("Disconnect ChatGPT") {
-                        viewModel.disconnectChatGPT()
-                    }
-                    .font(.caption2)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -123,6 +125,7 @@ struct MenuContentView: View {
 struct ServiceHeaderView: View {
     let name: String
     let isConnected: Bool
+    var onDisconnect: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 8) {
@@ -134,6 +137,15 @@ struct ServiceHeaderView: View {
                 .font(.system(.headline, design: .rounded))
 
             Spacer()
+
+            if let onDisconnect {
+                Button("Disconnect") {
+                    onDisconnect()
+                }
+                .font(.caption2)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -152,16 +164,13 @@ struct UsageSectionView: View {
     var body: some View {
         switch usageData.status {
         case .loaded where !usageData.buckets.isEmpty:
-            ScrollView {
-                VStack(spacing: 10) {
-                    ForEach(usageData.buckets) { bucket in
-                        UsageBarView(bucket: bucket)
-                    }
+            VStack(spacing: 10) {
+                ForEach(usageData.buckets) { bucket in
+                    UsageBarView(bucket: bucket)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
             }
-            .frame(maxHeight: 200)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
 
         case .loaded:
             VStack(spacing: 4) {
@@ -211,7 +220,6 @@ struct UsageSectionView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .tint(.blue)
             }
             .padding(.vertical, 10)
         }

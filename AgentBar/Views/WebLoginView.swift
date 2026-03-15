@@ -16,13 +16,14 @@ struct WebLoginWebView: NSViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: webConfig)
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
 
         let request = URLRequest(url: config.loginURL)
         webView.load(request)
 
-        // Start polling for login (handles SPA route changes that don't trigger didFinish)
-        context.coordinator.startPolling()
+        // Store reference for polling
+        context.coordinator.webView = webView
 
         return webView
     }
@@ -33,30 +34,30 @@ struct WebLoginWebView: NSViewRepresentable {
         Coordinator(config: config, loginManager: loginManager, onLoginDetected: onLoginDetected)
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let config: WebLoginManager.ServiceConfig
         let loginManager: WebLoginManager
         let onLoginDetected: () -> Void
+        weak var webView: WKWebView?
         private var hasDetectedLogin = false
         private var pollTimer: Timer?
-        /// Set to true after the initial page finishes loading (avoids false positive on first redirect)
         private var initialLoadDone = false
 
         init(config: WebLoginManager.ServiceConfig, loginManager: WebLoginManager, onLoginDetected: @escaping () -> Void) {
             self.config = config
             self.loginManager = loginManager
             self.onLoginDetected = onLoginDetected
+            super.init()
+            startPolling()
         }
 
         deinit {
             pollTimer?.invalidate()
         }
 
-        // MARK: - Polling (primary detection for SPAs like ChatGPT)
+        // MARK: - Polling
 
-        func startPolling() {
-            // Poll every 3 seconds to check if the user has logged in.
-            // This handles SPA client-side navigations that don't trigger didFinish.
+        private func startPolling() {
             pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
                 self?.pollForLogin()
             }
@@ -64,27 +65,40 @@ struct WebLoginWebView: NSViewRepresentable {
 
         private func pollForLogin() {
             guard !hasDetectedLogin, initialLoadDone else { return }
-            checkCookiesAndComplete()
+            // Only poll when the WKWebView is on the service's own domain.
+            // During OAuth (auth0.openai.com, accounts.google.com, etc.) skip.
+            guard let currentURL = webView?.url?.absoluteString,
+                  isLoggedInURL(currentURL) else { return }
+            checkLogin()
         }
 
-        // MARK: - WKNavigationDelegate (fast path for full navigations)
+        // MARK: - WKNavigationDelegate
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             if !initialLoadDone {
                 initialLoadDone = true
-                return // Skip the first load (auth page itself)
+                return
             }
-
             guard !hasDetectedLogin else { return }
 
-            if let url = webView.url?.absoluteString,
-               isLoggedInURL(url) {
-                checkCookiesAndComplete()
+            if let url = webView.url?.absoluteString, isLoggedInURL(url) {
+                checkLogin()
             }
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
             .allow
+        }
+
+        // MARK: - WKUIDelegate
+
+        /// Handle popups (window.open / target="_blank") by loading in the same webView.
+        /// OAuth providers (Google, Apple, etc.) often open in a new window.
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let url = navigationAction.request.url {
+                webView.load(URLRequest(url: url))
+            }
+            return nil
         }
 
         // MARK: - Login Detection
@@ -95,52 +109,61 @@ struct WebLoginWebView: NSViewRepresentable {
                 && !url.contains("auth")
         }
 
-        private func checkCookiesAndComplete() {
+        private func checkLogin() {
             Task { @MainActor in
                 guard !hasDetectedLogin else { return }
 
-                let hasSession = await loginManager.hasValidSession()
-                guard hasSession else { return }
-
-                // If the service requires API validation, verify the session is real
-                if let validationPath = config.sessionValidationPath {
-                    guard let cookieHeader = await loginManager.getCookieHeader() else { return }
-                    let isValid = await validateSessionWithAPI(
-                        cookieHeader: cookieHeader,
-                        baseURL: config.baseURL,
-                        path: validationPath
-                    )
+                // For services with a session validation path (e.g. ChatGPT),
+                // use JS fetch() directly — more reliable than cookie name checks.
+                if config.sessionValidationPath != nil {
+                    let isValid = await validateSessionViaJS()
                     guard isValid else { return }
+                } else {
+                    let hasSession = await loginManager.hasValidSession()
+                    guard hasSession else { return }
                 }
-
                 hasDetectedLogin = true
                 pollTimer?.invalidate()
                 onLoginDetected()
             }
         }
 
-        /// Call the session API to verify the login is real.
-        private func validateSessionWithAPI(cookieHeader: String, baseURL: String, path: String) async -> Bool {
-            guard let url = URL(string: baseURL + path) else { return false }
+        /// Validate the session by running fetch() inside the WKWebView.
+        /// This avoids Cloudflare blocking (same browser context, same cookies).
+        @MainActor
+        private func validateSessionViaJS() async -> Bool {
+            guard let webView, let path = config.sessionValidationPath else { return false }
 
-            var request = URLRequest(url: url)
-            request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
-            request.setValue(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
-                forHTTPHeaderField: "User-Agent"
-            )
-            request.timeoutInterval = 10
+            // Use callAsyncJavaScript — it properly handles await / Promises
+            // (evaluateJavaScript cannot return Promise results)
+            //
+            // ChatGPT's /api/auth/session always returns JSON (e.g. {"expires":"..."})
+            // even when NOT logged in. We must check for "accessToken" which only
+            // exists when the user has an active session.
+            let js = """
+            try {
+                const r = await fetch(path, { credentials: 'include' });
+                if (!r.ok) return 'fail';
+                const text = await r.text();
+                if (!text || text === '{}' || text === '') return 'fail';
+                const j = JSON.parse(text);
+                if (!j) return 'fail';
+                // ChatGPT: accessToken is the definitive sign of a logged-in session.
+                // Generic: fall back to checking for user object or non-trivial keys.
+                if (j.accessToken) return 'ok';
+                if (j.user && typeof j.user === 'object') return 'ok';
+                return 'fail';
+            } catch(e) { return 'fail'; }
+            """
 
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
-                  let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  json["accessToken"] != nil else {
+            do {
+                let result = try await webView.callAsyncJavaScript(
+                    js, arguments: ["path": path], contentWorld: .page
+                )
+                return (result as? String) == "ok"
+            } catch {
                 return false
             }
-
-            return true
         }
     }
 }

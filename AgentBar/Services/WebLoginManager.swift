@@ -130,7 +130,9 @@ final class WebLoginManager: NSObject {
         let cookies = await store.httpCookieStore.allCookies()
 
         for requiredName in config.requiredCookies {
-            let found = cookies.contains { $0.name == requiredName && !$0.value.isEmpty }
+            // Use hasPrefix to match chunked cookies
+            // e.g. __Secure-next-auth.session-token.0, .1, .2
+            let found = cookies.contains { $0.name.hasPrefix(requiredName) && !$0.value.isEmpty }
             if found { return true }
         }
         return false

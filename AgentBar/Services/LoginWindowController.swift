@@ -43,6 +43,7 @@ final class LoginWindowController: NSObject, NSWindowDelegate {
         window.title = "\(config.displayName) — Sign In"
         window.center()
         window.isReleasedWhenClosed = false
+        window.hidesOnDeactivate = false
         window.delegate = self
         window.level = .floating
         window.makeKeyAndOrderFront(nil)
