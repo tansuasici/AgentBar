@@ -35,9 +35,9 @@ struct WebLoginWebView: NSViewRepresentable {
         let loginManager: WebLoginManager
         let onLoginDetected: () -> Void
         private var hasDetectedLogin = false
-        /// Tracks if we've navigated to an external auth provider (auth0, Google, Apple).
-        /// Prevents false-positive detection from initial auth redirects.
-        private var hasVisitedAuthProvider = false
+        /// Number of main-frame navigations seen (skip the first one to avoid
+        /// false positives from the initial auth→main-page redirect).
+        private var mainFrameNavigationCount = 0
 
         init(config: WebLoginManager.ServiceConfig, loginManager: WebLoginManager, onLoginDetected: @escaping () -> Void) {
             self.config = config
@@ -47,8 +47,7 @@ struct WebLoginWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard !hasDetectedLogin else { return }
-
-            trackAuthProvider(url: webView.url?.absoluteString)
+            mainFrameNavigationCount += 1
 
             if let url = webView.url?.absoluteString,
                isLoggedInURL(url) {
@@ -57,28 +56,10 @@ struct WebLoginWebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-            // Only check main-frame navigations (ignore subresources, iframes, etc.)
             guard navigationAction.targetFrame?.isMainFrame == true else {
                 return .allow
             }
-
-            let url = navigationAction.request.url?.absoluteString
-            trackAuthProvider(url: url)
-
-            if let url, !hasDetectedLogin, isLoggedInURL(url) {
-                checkCookiesAndComplete()
-            }
-
             return .allow
-        }
-
-        /// Track whether we've been through an external auth provider.
-        private func trackAuthProvider(url: String?) {
-            guard let url else { return }
-            let authProviders = ["auth0.openai.com", "accounts.google.com", "appleid.apple.com"]
-            if authProviders.contains(where: { url.contains($0) }) {
-                hasVisitedAuthProvider = true
-            }
         }
 
         /// Check if the URL looks like a logged-in page.
@@ -89,9 +70,9 @@ struct WebLoginWebView: NSViewRepresentable {
                 return false
             }
 
-            // For services with external auth (ChatGPT), require visiting the auth provider first
-            // to avoid false positives from initial redirects
-            if config.sessionValidationPath != nil && !hasVisitedAuthProvider {
+            // Skip the very first navigation (initial redirect from /auth/login → /)
+            // For services with API validation, the API call is the real gate.
+            if config.sessionValidationPath != nil && mainFrameNavigationCount <= 1 {
                 return false
             }
 
