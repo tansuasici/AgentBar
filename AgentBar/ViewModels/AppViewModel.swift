@@ -15,6 +15,7 @@ final class AppViewModel {
 
     private var refreshTimer: Timer?
     private let refreshInterval: TimeInterval = 300
+    private var hasStartedAutoRefresh = false
 
     private let claudeWebClient = ClaudeWebClient()
     private var chatGPTWebClient: ChatGPTWebClient?
@@ -49,6 +50,9 @@ final class AppViewModel {
     // MARK: - Auto Refresh
 
     func startAutoRefresh() {
+        guard !hasStartedAutoRefresh else { return }
+        hasStartedAutoRefresh = true
+
         refreshAll()
         updateChecker.checkForUpdates()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
@@ -61,6 +65,7 @@ final class AppViewModel {
     func stopAutoRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = nil
+        hasStartedAutoRefresh = false
     }
 
     private func refreshAll() {
@@ -75,7 +80,18 @@ final class AppViewModel {
         isClaudeRefreshing = true
 
         Task { @MainActor in
-            claudeUsageData = .loading()
+            // Only show loading spinner on first fetch
+            if claudeUsageData.status == .needsLogin || claudeUsageData.buckets.isEmpty {
+                claudeUsageData = .loading()
+            }
+
+            let safetyTimeout = Task { @MainActor in
+                try await Task.sleep(nanoseconds: 30_000_000_000)
+                if isClaudeRefreshing {
+                    claudeUsageData = .error(message: "Request timed out")
+                    isClaudeRefreshing = false
+                }
+            }
 
             do {
                 let buckets: [UsageBucket]
@@ -90,6 +106,7 @@ final class AppViewModel {
                 else {
                     claudeUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
                     isClaudeRefreshing = false
+                    safetyTimeout.cancel()
                     return
                 }
 
@@ -104,6 +121,7 @@ final class AppViewModel {
                 claudeUsageData = .error(message: error.localizedDescription)
             }
 
+            safetyTimeout.cancel()
             isClaudeRefreshing = false
         }
     }
@@ -119,12 +137,25 @@ final class AppViewModel {
         isChatGPTRefreshing = true
 
         Task { @MainActor in
-            chatGPTUsageData = .loading()
+            // Only show loading spinner on first fetch
+            if chatGPTUsageData.status == .needsLogin || chatGPTUsageData.buckets.isEmpty {
+                chatGPTUsageData = .loading()
+            }
+
+            // Safety timeout: reset state after 30s even if fetch hangs
+            let safetyTimeout = Task { @MainActor in
+                try await Task.sleep(nanoseconds: 30_000_000_000)
+                if isChatGPTRefreshing {
+                    chatGPTUsageData = .error(message: "Request timed out")
+                    isChatGPTRefreshing = false
+                }
+            }
 
             do {
                 guard let client = chatGPTWebClient else {
                     chatGPTUsageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
                     isChatGPTRefreshing = false
+                    safetyTimeout.cancel()
                     return
                 }
 
@@ -141,6 +172,7 @@ final class AppViewModel {
                 chatGPTUsageData = .error(message: error.localizedDescription)
             }
 
+            safetyTimeout.cancel()
             isChatGPTRefreshing = false
         }
     }

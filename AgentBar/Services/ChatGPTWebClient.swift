@@ -23,20 +23,30 @@ final class ChatGPTWebClient: NSObject {
 
         // Use callAsyncJavaScript — it properly handles await / Promises
         // (evaluateJavaScript returns WKError code 5 for Promise results)
+        // AbortController ensures fetch calls timeout after 15s
         let js = """
         try {
-            const authResp = await fetch('/api/auth/session', { credentials: 'include' });
+            const timeout = 15000;
+
+            const ac1 = new AbortController();
+            const t1 = setTimeout(() => ac1.abort(), timeout);
+            const authResp = await fetch('/api/auth/session', { credentials: 'include', signal: ac1.signal });
+            clearTimeout(t1);
             if (!authResp.ok) return JSON.stringify({ error: 'auth', status: authResp.status });
             const auth = await authResp.json();
             if (!auth.accessToken) return JSON.stringify({ error: 'no_token' });
 
+            const ac2 = new AbortController();
+            const t2 = setTimeout(() => ac2.abort(), timeout);
             const resp = await fetch('/backend-api/wham/usage', {
                 headers: {
                     'Authorization': 'Bearer ' + auth.accessToken,
                     'Content-Type': 'application/json'
                 },
-                credentials: 'include'
+                credentials: 'include',
+                signal: ac2.signal
             });
+            clearTimeout(t2);
             if (!resp.ok) return JSON.stringify({ error: 'usage', status: resp.status });
             const data = await resp.json();
             return JSON.stringify({ ok: true, data: data });
@@ -115,10 +125,10 @@ final class ChatGPTWebClient: NSObject {
         return wv
     }
 
-    /// Load HTML in the web view and wait for didFinish.
+    /// Load HTML in the web view and wait for didFinish, with a 10s safety timeout.
     private func loadHTML(_ wv: WKWebView, html: String, baseURL: URL) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let handler = OneTimeNavigationDelegate(continuation: continuation)
+            let handler = OneTimeNavigationDelegate(continuation: continuation, timeoutSeconds: 10)
             wv.navigationDelegate = handler
             objc_setAssociatedObject(wv, &ChatGPTKeys.navDelegate, handler, .OBJC_ASSOCIATION_RETAIN)
             wv.loadHTMLString(html, baseURL: baseURL)
@@ -237,23 +247,40 @@ private enum ChatGPTKeys { nonisolated(unsafe) static var navDelegate = 0 }
 
 private final class OneTimeNavigationDelegate: NSObject, WKNavigationDelegate {
     private var continuation: CheckedContinuation<Void, Error>?
+    private var timeoutTimer: Timer?
 
-    init(continuation: CheckedContinuation<Void, Error>) {
+    init(continuation: CheckedContinuation<Void, Error>, timeoutSeconds: TimeInterval = 10) {
         self.continuation = continuation
+        super.init()
+        timeoutTimer = Timer.scheduledTimer(withTimeInterval: timeoutSeconds, repeats: false) { [weak self] _ in
+            self?.timeout()
+        }
+    }
+
+    private func complete(error: Error? = nil) {
+        timeoutTimer?.invalidate()
+        timeoutTimer = nil
+        if let error {
+            continuation?.resume(throwing: error)
+        } else {
+            continuation?.resume()
+        }
+        continuation = nil
+    }
+
+    private func timeout() {
+        complete(error: URLError(.timedOut))
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        continuation?.resume()
-        continuation = nil
+        complete()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        continuation?.resume(throwing: error)
-        continuation = nil
+        complete(error: error)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        continuation?.resume(throwing: error)
-        continuation = nil
+        complete(error: error)
     }
 }
