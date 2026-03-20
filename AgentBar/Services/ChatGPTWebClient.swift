@@ -180,10 +180,9 @@ final class ChatGPTWebClient: NSObject {
         let percent: Double
 
         if let used = dict["used_percent"] as? Double {
-            percent = used > 1 ? used / 100 : used
+            percent = used / 100
         } else if let remaining = dict["remaining_percent"] as? Double {
-            let r = remaining > 1 ? remaining / 100 : remaining
-            percent = 1 - r
+            percent = 1 - remaining / 100
         } else if let used = dict["usage"] as? Double, let limit = dict["limit"] as? Double, limit > 0 {
             percent = min(used / limit, 1)
         } else {
