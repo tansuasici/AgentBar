@@ -115,23 +115,22 @@ final class ChatGPTWebClient: NSObject {
         wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
         self.webView = wv
 
-        // Load minimal HTML with chatgpt.com as base URL.
-        // This sets the security origin so fetch() calls carry the right cookies
-        // without loading the full React SPA.
-        let html = "<!DOCTYPE html><html><head></head><body></body></html>"
-        try await loadHTML(wv, html: html, baseURL: URL(string: "https://chatgpt.com")!)
+        // Navigate to a real chatgpt.com URL to establish proper security origin.
+        // loadHTMLString(baseURL:) no longer sets security origin for fetch() on macOS 15+.
+        // We use /api/auth/session as it's lightweight and validates our session at the same time.
+        try await navigateTo(wv, url: URL(string: "https://chatgpt.com/api/auth/session")!)
 
         isReady = true
         return wv
     }
 
-    /// Load HTML in the web view and wait for didFinish, with a 10s safety timeout.
-    private func loadHTML(_ wv: WKWebView, html: String, baseURL: URL) async throws {
+    /// Navigate the web view to a URL and wait for didFinish, with a 10s safety timeout.
+    private func navigateTo(_ wv: WKWebView, url: URL) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let handler = OneTimeNavigationDelegate(continuation: continuation, timeoutSeconds: 10)
             wv.navigationDelegate = handler
             objc_setAssociatedObject(wv, &ChatGPTKeys.navDelegate, handler, .OBJC_ASSOCIATION_RETAIN)
-            wv.loadHTMLString(html, baseURL: baseURL)
+            wv.load(URLRequest(url: url))
         }
     }
 

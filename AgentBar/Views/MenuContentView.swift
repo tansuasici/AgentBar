@@ -6,59 +6,56 @@ struct MenuContentView: View {
     var body: some View {
         VStack(spacing: 0) {
 
-            // ── Scrollable Usage Area ─────────────────────
-            ScrollView {
-                VStack(spacing: 0) {
+            // ── Usage Area ────────────────────────────────
+            VStack(spacing: 0) {
 
-                    // ── Claude ─────────────────────────────
-                    ServiceHeaderView(
-                        name: "Claude",
-                        isConnected: viewModel.hasClaudeData,
-                        onDisconnect: viewModel.hasClaudeData ? {
-                            viewModel.disconnectClaude()
-                        } : nil
-                    )
-                    Divider()
-                    UsageSectionView(
-                        usageData: viewModel.claudeUsageData,
-                        isDesktopInstalled: viewModel.isClaudeDesktopInstalled,
-                        desktopHint: "Open Claude Desktop or sign in below",
-                        signInLabel: "Sign in to Claude",
-                        onSignIn: {
-                            LoginWindowController.shared.open(
-                                config: WebLoginManager.claudeConfig,
-                                loginManager: viewModel.claudeLoginManager,
-                                onComplete: { viewModel.refreshClaudeUsage() }
-                            )
-                        }
-                    )
+                // ── Claude ─────────────────────────────
+                ServiceHeaderView(
+                    name: "Claude",
+                    isConnected: viewModel.hasClaudeData,
+                    onDisconnect: viewModel.hasClaudeData ? {
+                        viewModel.disconnectClaude()
+                    } : nil
+                )
+                Divider()
+                UsageSectionView(
+                    usageData: viewModel.claudeUsageData,
+                    isDesktopInstalled: viewModel.isClaudeDesktopInstalled,
+                    desktopHint: "Open Claude Desktop or sign in below",
+                    signInLabel: "Sign in to Claude",
+                    onSignIn: {
+                        LoginWindowController.shared.open(
+                            config: WebLoginManager.claudeConfig,
+                            loginManager: viewModel.claudeLoginManager,
+                            onComplete: { viewModel.refreshClaudeUsage() }
+                        )
+                    }
+                )
 
-                    // ── ChatGPT ────────────────────────────
-                    Divider()
-                    ServiceHeaderView(
-                        name: "ChatGPT",
-                        isConnected: viewModel.hasChatGPTData,
-                        onDisconnect: viewModel.hasChatGPTData ? {
-                            viewModel.disconnectChatGPT()
-                        } : nil
-                    )
-                    Divider()
-                    UsageSectionView(
-                        usageData: viewModel.chatGPTUsageData,
-                        isDesktopInstalled: false,
-                        desktopHint: nil,
-                        signInLabel: "Sign in to ChatGPT",
-                        onSignIn: {
-                            LoginWindowController.shared.open(
-                                config: WebLoginManager.chatGPTConfig,
-                                loginManager: viewModel.chatGPTLoginManager,
-                                onComplete: { viewModel.refreshChatGPTUsage() }
-                            )
-                        }
-                    )
-                }
+                // ── ChatGPT ────────────────────────────
+                Divider()
+                ServiceHeaderView(
+                    name: "ChatGPT",
+                    isConnected: viewModel.hasChatGPTData,
+                    onDisconnect: viewModel.hasChatGPTData ? {
+                        viewModel.disconnectChatGPT()
+                    } : nil
+                )
+                Divider()
+                UsageSectionView(
+                    usageData: viewModel.chatGPTUsageData,
+                    isDesktopInstalled: false,
+                    desktopHint: nil,
+                    signInLabel: "Sign in to ChatGPT",
+                    onSignIn: {
+                        LoginWindowController.shared.open(
+                            config: WebLoginManager.chatGPTConfig,
+                            loginManager: viewModel.chatGPTLoginManager,
+                            onComplete: { viewModel.refreshChatGPTUsage() }
+                        )
+                    }
+                )
             }
-            .frame(maxHeight: 400)
 
             // ── Update Banner ───────────────────────────
             if viewModel.updateChecker.isUpdateAvailable,
