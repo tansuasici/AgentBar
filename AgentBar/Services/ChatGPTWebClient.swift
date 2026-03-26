@@ -18,7 +18,21 @@ final class ChatGPTWebClient: NSObject {
     // MARK: - Public API
 
     /// Fetch ChatGPT usage buckets from the wham/usage endpoint.
+    /// Retries once on transient failures (network errors, timeouts) with a fresh WebView.
     func fetchUsage() async throws -> [UsageBucket] {
+        do {
+            return try await fetchUsageOnce()
+        } catch ServiceError.unauthorized {
+            throw ServiceError.unauthorized
+        } catch {
+            // Transient failure — invalidate stale WebView and retry once
+            invalidate()
+            try await Task.sleep(nanoseconds: 1_000_000_000) // 1s backoff
+            return try await fetchUsageOnce()
+        }
+    }
+
+    private func fetchUsageOnce() async throws -> [UsageBucket] {
         let wv = try await getReadyWebView()
 
         // Use callAsyncJavaScript — it properly handles await / Promises
@@ -51,7 +65,7 @@ final class ChatGPTWebClient: NSObject {
             const data = await resp.json();
             return JSON.stringify({ ok: true, data: data });
         } catch(e) {
-            return JSON.stringify({ error: 'exception', message: e.message });
+            return JSON.stringify({ error: 'exception', message: e.message || 'Unknown error' });
         }
         """
 
@@ -70,6 +84,7 @@ final class ChatGPTWebClient: NSObject {
 
         // Handle errors
         if let error = response["error"] as? String {
+            let message = response["message"] as? String
             switch error {
             case "auth", "no_token":
                 invalidate()
@@ -81,6 +96,9 @@ final class ChatGPTWebClient: NSObject {
                     throw ServiceError.unauthorized
                 }
                 throw ServiceError.invalidResponse(status)
+            case "exception":
+                // Network/timeout errors from JS — throw as networkError so retry kicks in
+                throw ServiceError.networkError(message ?? "Connection failed")
             default:
                 throw ServiceError.decodingError
             }

@@ -271,6 +271,7 @@ enum ServiceError: LocalizedError, Equatable {
     case unauthorized
     case rateLimited
     case decodingError
+    case networkError(String)
 
     var errorDescription: String? {
         switch self {
@@ -279,6 +280,7 @@ enum ServiceError: LocalizedError, Equatable {
         case .unauthorized: "Session expired. Reopen Claude Desktop."
         case .rateLimited: "Rate limited. Try again later."
         case .decodingError: "Could not read response data"
+        case .networkError(let msg): msg
         }
     }
 }
