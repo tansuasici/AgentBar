@@ -65,6 +65,19 @@ struct GeneralPane: View {
                     }
                 }
             }
+
+            Section("Keyboard Shortcut") {
+                HStack {
+                    Text("Toggle menu")
+                    Spacer()
+                    Text("⌃⌥M")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
+                }
+            }
         }
         .formStyle(.grouped)
         .onAppear {
