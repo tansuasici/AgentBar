@@ -68,31 +68,24 @@ struct MenuContentView: View {
 
             Divider()
 
-            // ── Settings ────────────────────────────────
-            HStack {
-                Toggle("Launch at Login", isOn: Binding(
-                    get: { viewModel.launchAtLogin },
-                    set: { viewModel.launchAtLogin = $0 }
-                ))
-                .font(.caption)
-                .toggleStyle(.checkbox)
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-
-            Divider()
-
             // ── Footer ──────────────────────────────────
             HStack {
+                Button("Settings...") {
+                    viewModel.openSettings()
+                }
+                .font(.caption)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .keyboardShortcut(",", modifiers: .command)
+
+                Spacer()
+
                 Button("Quit") {
                     NSApplication.shared.terminate(nil)
                 }
                 .font(.caption)
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-
-                Spacer()
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)

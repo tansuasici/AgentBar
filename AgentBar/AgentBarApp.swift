@@ -17,5 +17,9 @@ struct AgentBarApp: App {
             }
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            PreferencesView()
+        }
     }
 }

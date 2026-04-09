@@ -15,7 +15,6 @@ final class AppViewModel {
 
     var selectedProviderId: String {
         get {
-            // If stored ID is invalid or empty, pick first connected (or first overall)
             if let _ = providers.first(where: { $0.id == _selectedProviderId }) {
                 return _selectedProviderId
             }
@@ -36,34 +35,21 @@ final class AppViewModel {
     // MARK: - General State
 
     private var refreshTimer: Timer?
-    private let refreshInterval: TimeInterval = 300
     private var hasStartedAutoRefresh = false
 
-    let updateChecker = UpdateChecker()
-
-    // MARK: - Launch at Login
-
-    var launchAtLogin: Bool = false {
-        didSet {
-            guard launchAtLogin != oldValue else { return }
-            do {
-                if launchAtLogin {
-                    try SMAppService.mainApp.register()
-                } else {
-                    try SMAppService.mainApp.unregister()
-                }
-            } catch {
-                launchAtLogin = oldValue
-            }
-        }
+    private var refreshInterval: TimeInterval {
+        UserDefaults.standard.double(forKey: "refreshInterval").rounded() > 0
+            ? UserDefaults.standard.double(forKey: "refreshInterval")
+            : 300
     }
+
+    let updateChecker = UpdateChecker()
 
     init() {
         providers = [
             ClaudeProvider(),
             ChatGPTProvider(),
         ]
-        launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
     // MARK: - Auto Refresh
@@ -74,17 +60,22 @@ final class AppViewModel {
 
         refreshAll()
         updateChecker.checkForUpdates()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshAll()
-            }
-        }
+        scheduleTimer()
     }
 
     func stopAutoRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = nil
         hasStartedAutoRefresh = false
+    }
+
+    private func scheduleTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshAll()
+            }
+        }
     }
 
     private func refreshAll() {
@@ -97,5 +88,10 @@ final class AppViewModel {
 
     func provider(for id: String) -> (any UsageProvider)? {
         providers.first { $0.id == id }
+    }
+
+    func openSettings() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
