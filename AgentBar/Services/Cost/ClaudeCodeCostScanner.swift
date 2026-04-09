@@ -1,21 +1,12 @@
 import Foundation
 
 /// Scans Claude Code JSONL session files under ~/.claude/projects/ to compute token costs.
-/// Uses incremental parsing: tracks last read byte offset per file to avoid re-reading.
+/// Deduplicates by requestId to avoid counting the same API call multiple times
+/// (each request produces multiple JSONL lines for thinking/text/tool_use blocks).
 @MainActor @Observable
 final class ClaudeCodeCostScanner {
     var costData: CostData = .empty
     var isScanning = false
-
-    private var fileOffsets: [String: UInt64] = [:]
-    private var accumulated: [String: AccumulatedModel] = [:]
-
-    private struct AccumulatedModel {
-        var inputTokens: Int = 0
-        var outputTokens: Int = 0
-        var cacheReadTokens: Int = 0
-        var cacheWriteTokens: Int = 0
-    }
 
     private let claudeDir: URL = {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects")
@@ -26,56 +17,45 @@ final class ClaudeCodeCostScanner {
         isScanning = true
         defer { isScanning = false }
 
-        await Task.detached(priority: .utility) { [claudeDir, fileOffsets] in
+        await Task.detached(priority: .utility) { [claudeDir] in
             let fm = FileManager.default
             guard fm.fileExists(atPath: claudeDir.path) else { return }
 
             let cutoff30Days = Date().addingTimeInterval(-30 * 24 * 3600)
             let todayStart = Calendar.current.startOfDay(for: Date())
 
+            // ISO8601 formatters — one with fractional seconds, one without
+            let fmtFrac = ISO8601DateFormatter()
+            fmtFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let fmtPlain = ISO8601DateFormatter()
+            fmtPlain.formatOptions = [.withInternetDateTime]
+
+            // Track seen requestIds to avoid double-counting
+            var seenRequests = Set<String>()
+
             var allModels: [String: (input: Int, output: Int, cacheRead: Int, cacheWrite: Int)] = [:]
             var todayModels: [String: (input: Int, output: Int, cacheRead: Int, cacheWrite: Int)] = [:]
 
-            // Find all JSONL files
             guard let enumerator = fm.enumerator(
                 at: claudeDir,
-                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+                includingPropertiesForKeys: [.contentModificationDateKey],
                 options: [.skipsHiddenFiles]
             ) else { return }
-
-            var offsets = fileOffsets
 
             for case let fileURL as URL in enumerator {
                 guard fileURL.pathExtension == "jsonl" else { continue }
 
-                // Skip files not modified in last 30 days
                 if let modDate = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
                    modDate < cutoff30Days { continue }
 
-                let path = fileURL.path
-                let startOffset = offsets[path] ?? 0
+                guard let data = try? Data(contentsOf: fileURL) else { continue }
 
-                guard let fileSize = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-                      UInt64(fileSize) > startOffset else { continue }
-
-                guard let handle = FileHandle(forReadingAtPath: path) else { continue }
-                defer { handle.closeFile() }
-
-                if startOffset > 0 {
-                    handle.seek(toFileOffset: startOffset)
-                }
-
-                guard let data = try? handle.readToEnd(), !data.isEmpty else { continue }
-                offsets[path] = startOffset + UInt64(data.count)
-
-                // Parse line by line
                 data.withUnsafeBytes { buffer in
                     guard let base = buffer.baseAddress else { return }
                     var lineStart = 0
                     let count = data.count
 
                     while lineStart < count {
-                        // Find end of line
                         var lineEnd = lineStart
                         while lineEnd < count && base.load(fromByteOffset: lineEnd, as: UInt8.self) != 0x0A {
                             lineEnd += 1
@@ -84,7 +64,6 @@ final class ClaudeCodeCostScanner {
                         let lineData = Data(bytes: base + lineStart, count: lineEnd - lineStart)
                         lineStart = lineEnd + 1
 
-                        // Quick check: does line contain "usage"?
                         guard lineData.range(of: Data("\"usage\"".utf8)) != nil,
                               lineData.range(of: Data("\"assistant\"".utf8)) != nil else { continue }
 
@@ -92,6 +71,11 @@ final class ClaudeCodeCostScanner {
                               json["type"] as? String == "assistant",
                               let message = json["message"] as? [String: Any],
                               let usage = message["usage"] as? [String: Any] else { continue }
+
+                        // Deduplicate: skip if we've already seen this requestId
+                        if let requestId = json["requestId"] as? String {
+                            guard seenRequests.insert(requestId).inserted else { continue }
+                        }
 
                         let model = message["model"] as? String ?? "unknown"
                         let inputTok = usage["input_tokens"] as? Int ?? 0
@@ -107,17 +91,16 @@ final class ClaudeCodeCostScanner {
                         existing.cacheWrite += cacheWrite
                         allModels[model] = existing
 
-                        // Check if today
-                        if let timestamp = json["timestamp"] as? String {
-                            let fmt = ISO8601DateFormatter()
-                            if let date = fmt.date(from: timestamp), date >= todayStart {
-                                var todayExisting = todayModels[model] ?? (0, 0, 0, 0)
-                                todayExisting.input += inputTok
-                                todayExisting.output += outputTok
-                                todayExisting.cacheRead += cacheRead
-                                todayExisting.cacheWrite += cacheWrite
-                                todayModels[model] = todayExisting
-                            }
+                        // Check if today — try both timestamp formats
+                        if let timestamp = json["timestamp"] as? String,
+                           let date = fmtFrac.date(from: timestamp) ?? fmtPlain.date(from: timestamp),
+                           date >= todayStart {
+                            var todayExisting = todayModels[model] ?? (0, 0, 0, 0)
+                            todayExisting.input += inputTok
+                            todayExisting.output += outputTok
+                            todayExisting.cacheRead += cacheRead
+                            todayExisting.cacheWrite += cacheWrite
+                            todayModels[model] = todayExisting
                         }
                     }
                 }
@@ -132,48 +115,34 @@ final class ClaudeCodeCostScanner {
 
             for (model, counts) in allModels.sorted(by: { $0.key < $1.key }) {
                 let cost = ClaudePricing.cost(
-                    model: model,
-                    input: counts.input,
-                    output: counts.output,
-                    cacheRead: counts.cacheRead,
-                    cacheWrite: counts.cacheWrite
+                    model: model, input: counts.input, output: counts.output,
+                    cacheRead: counts.cacheRead, cacheWrite: counts.cacheWrite
                 )
                 totalCost += cost
                 totalTokens += counts.input + counts.output + counts.cacheRead + counts.cacheWrite
-
                 breakdown.append(ModelCost(
-                    id: model,
-                    inputTokens: counts.input,
-                    outputTokens: counts.output,
-                    cacheReadTokens: counts.cacheRead,
-                    cacheWriteTokens: counts.cacheWrite,
-                    cost: cost
+                    id: model, inputTokens: counts.input, outputTokens: counts.output,
+                    cacheReadTokens: counts.cacheRead, cacheWriteTokens: counts.cacheWrite, cost: cost
                 ))
             }
 
             for (model, counts) in todayModels {
                 let cost = ClaudePricing.cost(
-                    model: model,
-                    input: counts.input,
-                    output: counts.output,
-                    cacheRead: counts.cacheRead,
-                    cacheWrite: counts.cacheWrite
+                    model: model, input: counts.input, output: counts.output,
+                    cacheRead: counts.cacheRead, cacheWrite: counts.cacheWrite
                 )
                 todayCost += cost
                 todayTokens += counts.input + counts.output + counts.cacheRead + counts.cacheWrite
             }
 
             let result = CostData(
-                todayCost: todayCost,
-                todayTokens: todayTokens,
-                last30DaysCost: totalCost,
-                last30DaysTokens: totalTokens,
+                todayCost: todayCost, todayTokens: todayTokens,
+                last30DaysCost: totalCost, last30DaysTokens: totalTokens,
                 perModelBreakdown: breakdown.sorted { $0.cost > $1.cost }
             )
 
-            await MainActor.run { [offsets] in
+            await MainActor.run {
                 self.costData = result
-                self.fileOffsets = offsets
             }
         }.value
     }

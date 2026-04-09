@@ -240,11 +240,17 @@ struct UsageSectionView: View {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.title3)
                     .foregroundStyle(.orange)
-                Text(msg)
+                Text(friendlyError(msg))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
+
+                Button("Reconnect") {
+                    onSignIn()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -265,6 +271,19 @@ struct UsageSectionView: View {
             }
             .padding(.vertical, 10)
         }
+    }
+
+    private func friendlyError(_ msg: String) -> String {
+        if msg.contains("-1001") || msg.contains("timed out") {
+            return "Connection timed out"
+        }
+        if msg.contains("-1009") || msg.contains("not connected") {
+            return "No internet connection"
+        }
+        if msg.contains("unauthorized") || msg.contains("expired") {
+            return "Session expired"
+        }
+        return msg
     }
 }
 
