@@ -135,6 +135,8 @@ struct ProvidersPane: View {
 // MARK: - About
 
 struct AboutPane: View {
+    private let sparkleUpdater = SparkleUpdater()
+
     private var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
     }
@@ -170,11 +172,10 @@ struct AboutPane: View {
                 .buttonStyle(.link)
 
                 Button("Check for Updates") {
-                    if let url = URL(string: "https://github.com/tansuasici/AgentBar/releases/latest") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    sparkleUpdater.checkForUpdates()
                 }
                 .buttonStyle(.link)
+                .disabled(!sparkleUpdater.canCheckForUpdates)
             }
             .font(.caption)
 

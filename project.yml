@@ -6,12 +6,19 @@ options:
   xcodeVersion: "15.0"
   minimumXcodeGenVersion: "2.35.0"
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.8.1"
+
 targets:
   AgentBar:
     type: application
     platform: macOS
     sources:
       - AgentBar
+    dependencies:
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.agentbar.app

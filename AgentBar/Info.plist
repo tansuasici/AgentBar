@@ -26,5 +26,9 @@
     <string>Copyright © 2026 Tansu Asici. All rights reserved.</string>
     <key>CFBundleGetInfoString</key>
     <string>AgentBar - AI usage tracker for Claude and ChatGPT in your macOS menu bar</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/tansuasici/AgentBar/main/appcast.xml</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>
