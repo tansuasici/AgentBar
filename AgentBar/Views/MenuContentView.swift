@@ -141,12 +141,14 @@ struct ProviderTab: View {
                        let nsImage = NSImage(named: assetName) {
                         Image(nsImage: nsImage)
                             .resizable()
+                            .interpolation(.high)
                             .aspectRatio(contentMode: .fit)
                     } else {
                         Image(systemName: provider.iconSystemName)
                     }
                 }
-                .frame(width: 20, height: 20)
+                .frame(width: 22, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
 
                 Text(provider.displayName)
                     .font(.system(size: 9, weight: .medium))
