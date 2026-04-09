@@ -43,6 +43,9 @@ final class AppViewModel {
         providers = [
             ClaudeProvider(),
             ChatGPTProvider(),
+            CursorProvider(),
+            GeminiProvider(),
+            CopilotProvider(),
         ]
     }
 
