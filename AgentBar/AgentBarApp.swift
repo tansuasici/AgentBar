@@ -11,10 +11,7 @@ struct AgentBarApp: App {
                     viewModel.startAutoRefresh()
                 }
         } label: {
-            HStack(spacing: 4) {
-                Image("MenuBarIcon")
-                    .renderingMode(.template)
-            }
+            MenuBarIconView(providers: viewModel.providers)
         }
         .menuBarExtraStyle(.window)
 
