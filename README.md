@@ -73,10 +73,6 @@ All data stays on your device. AgentBar:
 - Cookies are stored locally in isolated per-service data stores
 - Cost tracking reads only local files on your machine
 
-## About
-
-Built by [Tansu Asici](https://github.com/tansuasici). Inspired by [CodexBar](https://github.com/steipete/CodexBar).
-
 ## License
 
 MIT

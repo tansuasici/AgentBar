@@ -163,27 +163,21 @@ struct AboutPane: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            VStack(spacing: 8) {
-                HStack(spacing: 16) {
-                    Button("GitHub") {
-                        if let url = URL(string: "https://github.com/tansuasici/AgentBar") {
-                            NSWorkspace.shared.open(url)
-                        }
+            HStack(spacing: 16) {
+                Button("GitHub") {
+                    if let url = URL(string: "https://github.com/tansuasici/AgentBar") {
+                        NSWorkspace.shared.open(url)
                     }
-                    .buttonStyle(.link)
-
-                    Button("Check for Updates") {
-                        sparkleUpdater.checkForUpdates()
-                    }
-                    .buttonStyle(.link)
-                    .disabled(!sparkleUpdater.canCheckForUpdates)
                 }
-                .font(.caption)
+                .buttonStyle(.link)
 
-                Text("Inspired by [CodexBar](https://github.com/steipete/CodexBar)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                Button("Check for Updates") {
+                    sparkleUpdater.checkForUpdates()
+                }
+                .buttonStyle(.link)
+                .disabled(!sparkleUpdater.canCheckForUpdates)
             }
+            .font(.caption)
 
             Spacer()
         }
