@@ -136,9 +136,17 @@ struct ProviderTab: View {
     var body: some View {
         Button(action: onSelect) {
             VStack(spacing: 4) {
-                Image(systemName: provider.iconSystemName)
-                    .font(.system(size: 16))
-                    .frame(width: 24, height: 24)
+                Group {
+                    if let assetName = provider.iconAssetName,
+                       let nsImage = NSImage(named: assetName) {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        Image(systemName: provider.iconSystemName)
+                    }
+                }
+                .frame(width: 20, height: 20)
 
                 Text(provider.displayName)
                     .font(.system(size: 9, weight: .medium))

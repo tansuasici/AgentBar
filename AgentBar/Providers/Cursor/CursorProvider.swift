@@ -5,6 +5,7 @@ final class CursorProvider: UsageProvider {
     let id = "cursor"
     let displayName = "Cursor"
     let iconSystemName = "cursorarrow.rays"
+    let iconAssetName: String? = "ProviderIcon-cursor"
 
     var usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
     var isRefreshing = false

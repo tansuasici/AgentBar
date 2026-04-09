@@ -5,6 +5,7 @@ final class ChatGPTProvider: UsageProvider {
     let id = "chatgpt"
     let displayName = "ChatGPT"
     let iconSystemName = "bubble.left.and.bubble.right"
+    let iconAssetName: String? = "ProviderIcon-chatgpt"
 
     var usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
     var isRefreshing = false

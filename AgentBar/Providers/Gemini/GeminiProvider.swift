@@ -6,6 +6,7 @@ final class GeminiProvider: UsageProvider {
     let id = "gemini"
     let displayName = "Gemini"
     let iconSystemName = "sparkles"
+    let iconAssetName: String? = "ProviderIcon-gemini"
 
     var usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
     var isRefreshing = false
@@ -51,11 +52,18 @@ final class GeminiProvider: UsageProvider {
         do {
             let token = try readAccessToken()
             let buckets = try await fetchQuota(accessToken: token)
-            usageData = LiveUsageData(buckets: buckets, status: .loaded, lastUpdated: Date())
-        } catch let error as ServiceError where error == .unauthorized {
-            usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+            if buckets.isEmpty {
+                usageData = LiveUsageData(buckets: [], status: .loaded, lastUpdated: Date())
+            } else {
+                usageData = LiveUsageData(buckets: buckets, status: .loaded, lastUpdated: Date())
+            }
         } catch {
-            usageData = .error(message: error.localizedDescription)
+            let msg = error.localizedDescription
+            if msg.contains("unauthorized") || msg.contains("401") || msg.contains("403") {
+                usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
+            } else {
+                usageData = .error(message: "Gemini: \(msg)")
+            }
         }
 
         isRefreshing = false

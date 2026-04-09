@@ -5,6 +5,7 @@ final class ClaudeProvider: UsageProvider {
     let id = "claude"
     let displayName = "Claude"
     let iconSystemName = "brain.head.profile"
+    let iconAssetName: String? = "ProviderIcon-claude"
 
     var usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
     var isRefreshing = false

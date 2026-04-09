@@ -6,6 +6,7 @@ final class CopilotProvider: UsageProvider {
     let id = "copilot"
     let displayName = "Copilot"
     let iconSystemName = "chevron.left.forwardslash.chevron.right"
+    let iconAssetName: String? = "ProviderIcon-copilot"
 
     var usageData = LiveUsageData(buckets: [], status: .needsLogin, lastUpdated: Date())
     var isRefreshing = false
