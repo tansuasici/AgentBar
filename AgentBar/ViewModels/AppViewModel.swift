@@ -8,6 +8,31 @@ final class AppViewModel {
 
     let providers: [any UsageProvider]
 
+    // MARK: - Selected Provider
+
+    @ObservationIgnored
+    private var _selectedProviderId: String = UserDefaults.standard.string(forKey: "selectedProvider") ?? ""
+
+    var selectedProviderId: String {
+        get {
+            // If stored ID is invalid or empty, pick first connected (or first overall)
+            if let _ = providers.first(where: { $0.id == _selectedProviderId }) {
+                return _selectedProviderId
+            }
+            let fallback = providers.first(where: { $0.isConnected })?.id ?? providers.first?.id ?? ""
+            _selectedProviderId = fallback
+            return fallback
+        }
+        set {
+            _selectedProviderId = newValue
+            UserDefaults.standard.set(newValue, forKey: "selectedProvider")
+        }
+    }
+
+    var selectedProvider: (any UsageProvider)? {
+        providers.first { $0.id == selectedProviderId }
+    }
+
     // MARK: - General State
 
     private var refreshTimer: Timer?

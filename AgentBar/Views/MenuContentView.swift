@@ -6,35 +6,40 @@ struct MenuContentView: View {
     var body: some View {
         VStack(spacing: 0) {
 
-            // ── Usage Area ────────────────────────────────
-            VStack(spacing: 0) {
-                ForEach(Array(viewModel.providers.enumerated()), id: \.element.id) { index, provider in
-                    if index > 0 {
-                        Divider()
-                    }
+            // ── Tab Bar ──────────────────────────────────
+            ProviderTabBar(
+                providers: viewModel.providers,
+                selectedId: Binding(
+                    get: { viewModel.selectedProviderId },
+                    set: { viewModel.selectedProviderId = $0 }
+                )
+            )
 
-                    ServiceHeaderView(
-                        name: provider.displayName,
-                        isConnected: provider.usageData.status == .loaded && !provider.usageData.buckets.isEmpty,
-                        onDisconnect: (provider.usageData.status == .loaded && !provider.usageData.buckets.isEmpty) ? {
-                            provider.disconnect()
-                        } : nil
-                    )
-                    Divider()
-                    UsageSectionView(
-                        usageData: provider.usageData,
-                        isDesktopInstalled: provider.id == "claude" && ChromiumCookieReader.isClaudeDesktopInstalled,
-                        desktopHint: provider.id == "claude" ? "Open Claude Desktop or sign in below" : nil,
-                        signInLabel: "Sign in to \(provider.displayName)",
-                        onSignIn: {
-                            LoginWindowController.shared.open(
-                                config: provider.loginConfig,
-                                loginManager: provider.loginManager,
-                                onComplete: { Task { await provider.refresh() } }
-                            )
-                        }
-                    )
-                }
+            Divider()
+
+            // ── Selected Provider ────────────────────────
+            if let provider = viewModel.selectedProvider {
+                ServiceHeaderView(
+                    name: provider.displayName,
+                    isConnected: provider.usageData.status == .loaded && !provider.usageData.buckets.isEmpty,
+                    onDisconnect: (provider.usageData.status == .loaded && !provider.usageData.buckets.isEmpty) ? {
+                        provider.disconnect()
+                    } : nil
+                )
+                Divider()
+                UsageSectionView(
+                    usageData: provider.usageData,
+                    isDesktopInstalled: provider.id == "claude" && ChromiumCookieReader.isClaudeDesktopInstalled,
+                    desktopHint: provider.id == "claude" ? "Open Claude Desktop or sign in below" : nil,
+                    signInLabel: "Sign in to \(provider.displayName)",
+                    onSignIn: {
+                        LoginWindowController.shared.open(
+                            config: provider.loginConfig,
+                            loginManager: provider.loginManager,
+                            onComplete: { Task { await provider.refresh() } }
+                        )
+                    }
+                )
             }
 
             // ── Update Banner ───────────────────────────
@@ -88,12 +93,66 @@ struct MenuContentView: View {
                 .foregroundStyle(.secondary)
 
                 Spacer()
-
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
-        .frame(width: 300)
+        .frame(width: 320)
+    }
+}
+
+// MARK: - Provider Tab Bar
+
+struct ProviderTabBar: View {
+    let providers: [any UsageProvider]
+    @Binding var selectedId: String
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(providers, id: \.id) { provider in
+                ProviderTab(
+                    provider: provider,
+                    isSelected: provider.id == selectedId,
+                    onSelect: { selectedId = provider.id }
+                )
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+    }
+}
+
+struct ProviderTab: View {
+    let provider: any UsageProvider
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(spacing: 4) {
+                Image(systemName: provider.iconSystemName)
+                    .font(.system(size: 16))
+                    .frame(width: 24, height: 24)
+
+                Text(provider.displayName)
+                    .font(.system(size: 9, weight: .medium))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? .primary : .secondary)
+        .opacity(provider.isConnected ? 1.0 : 0.5)
     }
 }
 
