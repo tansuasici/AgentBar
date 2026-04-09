@@ -65,23 +65,6 @@ Requires macOS 14.0 (Sonoma) or later.
 2. Enter the code shown in your browser and authorize
 3. Displays premium interaction and chat quotas
 
-## Architecture
-
-AgentBar uses a pluggable provider system. Each provider implements the `UsageProvider` protocol:
-
-```swift
-protocol UsageProvider: AnyObject, Identifiable, Observable {
-    var id: String { get }
-    var displayName: String { get }
-    var usageData: LiveUsageData { get }
-    func refresh() async
-    func startLogin()
-    func disconnect()
-}
-```
-
-Adding a new provider requires only creating a single file and appending it to the providers array.
-
 ## Privacy
 
 All data stays on your device. AgentBar:

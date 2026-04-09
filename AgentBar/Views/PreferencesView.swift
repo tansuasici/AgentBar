@@ -158,26 +158,32 @@ struct AboutPane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Text("Track your AI coding assistant usage from the menu bar.")
+            Text("Track Claude, ChatGPT, Cursor, Gemini, and\nGitHub Copilot usage from your menu bar.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            HStack(spacing: 16) {
-                Button("GitHub") {
-                    if let url = URL(string: "https://github.com/tansuasici/AgentBar") {
-                        NSWorkspace.shared.open(url)
+            VStack(spacing: 8) {
+                HStack(spacing: 16) {
+                    Button("GitHub") {
+                        if let url = URL(string: "https://github.com/tansuasici/AgentBar") {
+                            NSWorkspace.shared.open(url)
+                        }
                     }
-                }
-                .buttonStyle(.link)
+                    .buttonStyle(.link)
 
-                Button("Check for Updates") {
-                    sparkleUpdater.checkForUpdates()
+                    Button("Check for Updates") {
+                        sparkleUpdater.checkForUpdates()
+                    }
+                    .buttonStyle(.link)
+                    .disabled(!sparkleUpdater.canCheckForUpdates)
                 }
-                .buttonStyle(.link)
-                .disabled(!sparkleUpdater.canCheckForUpdates)
+                .font(.caption)
+
+                Text("Inspired by [CodexBar](https://github.com/steipete/CodexBar)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
-            .font(.caption)
 
             Spacer()
         }
