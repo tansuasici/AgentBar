@@ -83,12 +83,12 @@ struct MenuContentView: View {
 
             // ── Footer ──────────────────────────────────
             HStack {
-                SettingsLink {
-                    Text("Settings...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Button("Settings...") {
+                    SettingsWindowController.shared.show()
                 }
+                .font(.caption)
                 .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
 
                 Spacer()
 
