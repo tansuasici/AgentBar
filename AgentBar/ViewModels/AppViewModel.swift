@@ -44,6 +44,7 @@ final class AppViewModel {
     }
 
     let updateChecker = UpdateChecker()
+    let costScanner = ClaudeCodeCostScanner()
 
     init() {
         providers = [
@@ -82,6 +83,7 @@ final class AppViewModel {
         for provider in providers {
             Task { await provider.refresh() }
         }
+        Task { await costScanner.scan() }
     }
 
     // MARK: - Helpers

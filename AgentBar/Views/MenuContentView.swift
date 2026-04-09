@@ -42,6 +42,12 @@ struct MenuContentView: View {
                 )
             }
 
+            // ── Cost Section ────────────────────────────
+            if viewModel.costScanner.costData.last30DaysTokens > 0 {
+                Divider()
+                CostSectionView(costData: viewModel.costScanner.costData)
+            }
+
             // ── Update Banner ───────────────────────────
             if viewModel.updateChecker.isUpdateAvailable,
                let version = viewModel.updateChecker.latestVersion {
