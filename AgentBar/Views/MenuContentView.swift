@@ -48,8 +48,9 @@ struct MenuContentView: View {
                 )
             }
 
-            // ── Cost Section ────────────────────────────
-            if viewModel.costScanner.costData.last30DaysTokens > 0 {
+            // ── Cost Section (Claude Code only) ─────────
+            if selectedId == "claude",
+               viewModel.costScanner.costData.last30DaysTokens > 0 {
                 Divider()
                 CostSectionView(costData: viewModel.costScanner.costData)
             }
@@ -82,12 +83,12 @@ struct MenuContentView: View {
 
             // ── Footer ──────────────────────────────────
             HStack {
-                Button("Settings...") {
-                    openSettingsWindow()
+                SettingsLink {
+                    Text("Settings...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .font(.caption)
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
 
                 Spacer()
 
@@ -104,18 +105,6 @@ struct MenuContentView: View {
         .frame(width: 320)
     }
 
-    private func openSettingsWindow() {
-        // Try multiple approaches for opening Settings
-        if #available(macOS 14.0, *) {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        } else {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
-        // Activate the app so Settings window comes to front
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NSApp.activate(ignoringOtherApps: true)
-        }
-    }
 }
 
 // MARK: - Provider Tab Bar

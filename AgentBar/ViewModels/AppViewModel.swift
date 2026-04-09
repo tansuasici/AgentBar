@@ -84,9 +84,4 @@ final class AppViewModel {
     func provider(for id: String) -> (any UsageProvider)? {
         providers.first { $0.id == id }
     }
-
-    func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
 }
