@@ -2,6 +2,12 @@ import SwiftUI
 
 struct MenuContentView: View {
     @Bindable var viewModel: AppViewModel
+    @State private var selectedId: String = UserDefaults.standard.string(forKey: "selectedProvider") ?? "claude"
+
+    private var selectedProvider: (any UsageProvider)? {
+        viewModel.providers.first { $0.id == selectedId }
+            ?? viewModel.providers.first
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -9,16 +15,16 @@ struct MenuContentView: View {
             // ── Tab Bar ──────────────────────────────────
             ProviderTabBar(
                 providers: viewModel.providers,
-                selectedId: Binding(
-                    get: { viewModel.selectedProviderId },
-                    set: { viewModel.selectedProviderId = $0 }
-                )
+                selectedId: $selectedId
             )
+            .onChange(of: selectedId) { _, newValue in
+                UserDefaults.standard.set(newValue, forKey: "selectedProvider")
+            }
 
             Divider()
 
             // ── Selected Provider ────────────────────────
-            if let provider = viewModel.selectedProvider {
+            if let provider = selectedProvider {
                 ServiceHeaderView(
                     name: provider.displayName,
                     isConnected: provider.usageData.status == .loaded && !provider.usageData.buckets.isEmpty,
@@ -77,12 +83,11 @@ struct MenuContentView: View {
             // ── Footer ──────────────────────────────────
             HStack {
                 Button("Settings...") {
-                    viewModel.openSettings()
+                    openSettingsWindow()
                 }
                 .font(.caption)
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .keyboardShortcut(",", modifiers: .command)
 
                 Spacer()
 
@@ -97,6 +102,19 @@ struct MenuContentView: View {
             .padding(.vertical, 8)
         }
         .frame(width: 320)
+    }
+
+    private func openSettingsWindow() {
+        // Try multiple approaches for opening Settings
+        if #available(macOS 14.0, *) {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        } else {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        }
+        // Activate the app so Settings window comes to front
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 }
 
