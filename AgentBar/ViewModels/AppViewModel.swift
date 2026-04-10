@@ -46,6 +46,7 @@ final class AppViewModel {
             CursorProvider(),
             GeminiProvider(),
             CopilotProvider(),
+            ZaiProvider(),
         ]
     }
 

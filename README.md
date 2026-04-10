@@ -4,7 +4,7 @@
   <img src="icon.png" alt="AgentBar Logo" width="128" height="128">
 </p>
 
-A native macOS menu bar app that tracks your AI coding assistant usage and rate limits at a glance. Supports **Claude**, **ChatGPT**, **Cursor**, **Gemini**, and **GitHub Copilot**.
+A native macOS menu bar app that tracks your AI coding assistant usage and rate limits at a glance. Supports **Claude**, **ChatGPT**, **Cursor**, **Gemini**, **GitHub Copilot**, and **z.ai**.
 
 <p align="center">
   <img src="screenshot.png" width="314" alt="AgentBar screenshot">
@@ -12,7 +12,7 @@ A native macOS menu bar app that tracks your AI coding assistant usage and rate 
 
 ## Features
 
-- **Multi-Provider** — Track Claude, ChatGPT, Cursor, Gemini, and GitHub Copilot from a single menu bar app.
+- **Multi-Provider** — Track Claude, ChatGPT, Cursor, Gemini, GitHub Copilot, and z.ai from a single menu bar app.
 - **Tab Bar Navigation** — Switch between providers with a single click. Original brand icons for each service.
 - **Real-Time Usage** — Session and weekly rate limits with progress bars, percentages, and reset countdowns.
 - **Cost Tracking** — Scans local Claude Code session files to compute daily and monthly token costs with per-model breakdown.
@@ -31,6 +31,7 @@ A native macOS menu bar app that tracks your AI coding assistant usage and rate 
 | **Cursor** | Web sign-in (browser cookies) | Plan usage, on-demand costs, billing cycle |
 | **Gemini** | Gemini CLI credentials (`~/.gemini/oauth_creds.json`) | Per-model quota (Pro, Flash, Flash Lite) |
 | **Copilot** | GitHub OAuth Device Flow | Premium interactions and chat quotas |
+| **z.ai** | API key (`Z_AI_API_KEY` env var or dialog) | Token & session limits, MCP usage, plan info |
 
 ## Install
 
@@ -64,6 +65,12 @@ Requires macOS 14.0 (Sonoma) or later.
 1. Click "Sign in" to start the GitHub Device Flow
 2. Enter the code shown in your browser and authorize
 3. Displays premium interaction and chat quotas
+
+### z.ai (Zhipu GLM)
+1. Click "Connect z.ai" and paste your API key (get it from [open.bigmodel.cn](https://open.bigmodel.cn/usercenter/apikeys))
+2. Or set the `Z_AI_API_KEY` environment variable
+3. Displays token limits (5-hour and weekly windows), MCP usage, and plan name
+4. Supports BigModel CN region via `Z_AI_API_HOST` or `Z_AI_QUOTA_URL` env vars
 
 ## Privacy
 

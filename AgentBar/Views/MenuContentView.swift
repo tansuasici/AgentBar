@@ -37,13 +37,19 @@ struct MenuContentView: View {
                     usageData: provider.usageData,
                     isDesktopInstalled: provider.id == "claude" && ChromiumCookieReader.isClaudeDesktopInstalled,
                     desktopHint: provider.id == "claude" ? "Open Claude Desktop or sign in below" : nil,
-                    signInLabel: "Sign in to \(provider.displayName)",
+                    signInLabel: provider.handlesOwnLogin
+                        ? "Connect \(provider.displayName)"
+                        : "Sign in to \(provider.displayName)",
                     onSignIn: {
-                        LoginWindowController.shared.open(
-                            config: provider.loginConfig,
-                            loginManager: provider.loginManager,
-                            onComplete: { Task { await provider.refresh() } }
-                        )
+                        if provider.handlesOwnLogin {
+                            provider.startLogin()
+                        } else {
+                            LoginWindowController.shared.open(
+                                config: provider.loginConfig,
+                                loginManager: provider.loginManager,
+                                onComplete: { Task { await provider.refresh() } }
+                            )
+                        }
                     }
                 )
             }

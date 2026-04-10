@@ -16,8 +16,13 @@ protocol UsageProvider: AnyObject, Identifiable, Observable {
 
     var loginConfig: WebLoginManager.ServiceConfig { get }
     var loginManager: WebLoginManager { get }
+
+    /// If true, the provider handles its own login flow (e.g. API key dialog).
+    /// If false (default), the menu bar opens a web login window.
+    var handlesOwnLogin: Bool { get }
 }
 
 extension UsageProvider {
     var iconAssetName: String? { nil }
+    var handlesOwnLogin: Bool { false }
 }

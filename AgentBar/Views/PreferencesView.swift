@@ -158,7 +158,7 @@ struct AboutPane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Text("Track Claude, ChatGPT, Cursor, Gemini, and\nGitHub Copilot usage from your menu bar.")
+            Text("Track Claude, ChatGPT, Cursor, Gemini,\nCopilot, and z.ai usage from your menu bar.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
